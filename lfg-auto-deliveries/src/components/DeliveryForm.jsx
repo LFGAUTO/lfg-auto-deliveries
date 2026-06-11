@@ -30,7 +30,9 @@ export default function DeliveryForm({ existing, drivers, onClose, onSaved }) {
   useEffect(() => {
     if (existing) {
       const merged = { ...EMPTY, ...existing }
-      Object.keys(merged).forEach(k => { if (merged[k] === null) merged[k] = EMPTY[k] ?? '' })
+      // Only normalize the fields this form edits; never touch DB-managed
+      // timestamp columns (leaving them as-is keeps them out of our save payload).
+      Object.keys(EMPTY).forEach(k => { if (merged[k] === null || merged[k] === undefined) merged[k] = EMPTY[k] })
       setF(merged)
       const names = drivers.map(d => d.name)
       setD1Other(!!merged.driver1_name && !names.includes(merged.driver1_name))
@@ -48,19 +50,61 @@ export default function DeliveryForm({ existing, drivers, onClose, onSaved }) {
     if (d1Other && !f.driver1_name.trim()) { toast('Type the Driver 1 name'); return }
     if (d2Other && !f.driver2_name.trim()) { toast('Type the Driver 2 name'); return }
     setBusy(true)
+
+    // Turn any blank into a real null. Critical for date/time/timestamp columns —
+    // Postgres rejects "" for those, which was the "invalid input syntax for type
+    // timestamp with time zone" error on Edit > Save.
+    const clean = (v) => (typeof v === 'string' && v.trim() === '' ? null : v)
+
+    // Only the fields this form actually edits. We deliberately DO NOT send the
+    // status-timestamp columns (assigned_at, at_dealer_at, en_route_at,
+    // delivered_at, trade_picked_up_at, created_at) — those are managed by the
+    // status workflow, not by editing a delivery.
     const payload = {
-      ...f,
+      status: f.status,
+      customer_name: f.customer_name.trim(),
+      customer_phone: clean(f.customer_phone),
+      delivery_address: clean(f.delivery_address),
+      delivery_date: clean(f.delivery_date),
+      delivery_time: clean(f.delivery_time),
       driver1_name: f.driver1_name.trim() || null,
       driver2_name: f.driver2_name.trim() || null,
+      dealership_name: clean(f.dealership_name),
+      dealership_contact: clean(f.dealership_contact),
+      dealership_phone: clean(f.dealership_phone),
+      vin: clean(f.vin),
+      vyear: clean(f.vyear),
+      make: clean(f.make),
+      model: clean(f.model),
+      color: clean(f.color),
+      monthly_payment: clean(f.monthly_payment),
+      miles_per_year: clean(f.miles_per_year),
+      contract_type: clean(f.contract_type),
+      is_trade: f.is_trade,
+      trade_year: clean(f.trade_year),
+      trade_make: clean(f.trade_make),
+      trade_model: clean(f.trade_model),
+      trade_vin: clean(f.trade_vin),
+      trade_notes: clean(f.trade_notes),
+      trade_destination: f.trade_destination,
+      trade_return_dealer: clean(f.trade_return_dealer),
+      cod_required: f.cod_required,
+      cod_amount: clean(f.cod_amount),
+      cod_made_out_to: f.cod_made_out_to,
+      cod_type: f.cod_type,
+      cod_received: f.cod_received,
+      admin_notes: clean(f.admin_notes),
     }
+
     let res
     if (existing) {
+      payload.updated_at = new Date().toISOString()
       res = await supabase.from('deliveries').update(payload).eq('id', existing.id).select().single()
     } else {
       res = await supabase.from('deliveries').insert({ ...payload, created_by: profile.id }).select().single()
     }
     setBusy(false)
-    if (res.error) { toast('Error: ' + res.error.message); return }
+    if (res.error) { toast("Couldn't save — please check the fields and try again."); return }
 
     await supabase.from('activity_log').insert({
       delivery_id: res.data.id, user_id: profile.id, user_name: userName,
