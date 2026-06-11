@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 import { useToast } from '../components/Toast'
-import { vehicleLabel, downloadCSV } from '../lib/helpers'
+import { vehicleLabel, downloadCSV, printDeliveryPacket } from '../lib/helpers'
 import StatusPill from '../components/StatusPill'
 import DeliveryForm from '../components/DeliveryForm'
 
@@ -35,6 +35,30 @@ export default function Deliveries() {
   }
 
   const driverName = (d) => [d.driver1_name, d.driver2_name].filter(Boolean).join(' & ') || 'Unassigned'
+
+  const ORDER = ['assigned', 'at_dealer', 'en_route', 'delivered']
+  const STATUS_LABEL = { assigned: 'Assigned', at_dealer: 'At Dealer', en_route: 'En Route', delivered: 'Delivered', issue: 'Issue' }
+  const STAMP = { at_dealer: 'at_dealer_at', en_route: 'en_route_at', delivered: 'delivered_at' }
+
+  async function applyStatus(d, newStatus, verb) {
+    if (newStatus === d.status) return
+    if (!confirm(`${verb} ${d.customer_name} to ${STATUS_LABEL[newStatus]}?`)) return
+    const patch = { status: newStatus }
+    if (STAMP[newStatus]) patch[STAMP[newStatus]] = new Date().toISOString()
+    const { error } = await supabase.from('deliveries').update(patch).eq('id', d.id)
+    if (error) { toast("Couldn't update the status — try again."); return }
+    await supabase.from('activity_log').insert({
+      delivery_id: d.id, user_id: profile.id, user_name: userName,
+      action: `corrected ${d.customer_name} → ${STATUS_LABEL[newStatus]}`,
+    })
+    toast('Status updated'); load()
+  }
+
+  function moveBack(d) {
+    const idx = ORDER.indexOf(d.status)
+    if (idx <= 0) { toast('Already at the first step'); return }
+    applyStatus(d, ORDER[idx - 1], 'Move')
+  }
 
   function exportCSV() {
     const rows = deliveries.map(d => ({
@@ -73,7 +97,20 @@ export default function Deliveries() {
             </div>
             <div className="btnrow" style={{ marginTop: 12 }}>
               <button className="btn ghost sm" style={{ width: '100%' }} onClick={() => openEdit(d)}>Edit</button>
+              <button className="btn ghost sm" style={{ width: '100%' }} onClick={() => printDeliveryPacket(d)}>🖨 Print / PDF</button>
               <button className="btn danger sm" style={{ width: '100%' }} onClick={() => remove(d)}>Delete</button>
+            </div>
+            <div className="btnrow" style={{ marginTop: 8, alignItems: 'center' }}>
+              <button className="btn ghost sm" style={{ flex: '0 0 auto' }} onClick={() => moveBack(d)}>◀ Move Back</button>
+              <label className="fld" style={{ flex: 1, margin: 0 }}>
+                <select value={ORDER.includes(d.status) ? d.status : ''} onChange={e => applyStatus(d, e.target.value, 'Set')}>
+                  {!ORDER.includes(d.status) && <option value="" disabled>Issue — resolve on Dashboard</option>}
+                  <option value="assigned">Assigned</option>
+                  <option value="at_dealer">At Dealer</option>
+                  <option value="en_route">En Route</option>
+                  <option value="delivered">Delivered</option>
+                </select>
+              </label>
             </div>
           </div>
         ))}
