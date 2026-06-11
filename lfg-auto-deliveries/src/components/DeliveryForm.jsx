@@ -30,7 +30,6 @@ export default function DeliveryForm({ existing, drivers, onClose, onSaved }) {
   useEffect(() => {
     if (existing) {
       const merged = { ...EMPTY, ...existing }
-      // normalize null -> '' so inputs stay controlled
       Object.keys(merged).forEach(k => { if (merged[k] === null) merged[k] = EMPTY[k] ?? '' })
       setF(merged)
       const names = drivers.map(d => d.name)
@@ -72,18 +71,25 @@ export default function DeliveryForm({ existing, drivers, onClose, onSaved }) {
     onClose()
   }
 
-  const T = ({ children }) => <div className="section-title">{children}</div>
-  const In = ({ k, label, type = 'text', ...rest }) => (
+  // NOTE: these are plain helper FUNCTIONS that are CALLED ( {field(...)} ),
+  // not components used as <Field/>. That keeps each input mounted while you
+  // type, so focus is never lost. Do not convert these back to <Components/>.
+  const section = (text) => <div className="section-title">{text}</div>
+  const field = (k, label, type = 'text', extra = {}) => (
     <label className="fld"><span>{label}</span>
-      <input type={type} value={f[k]} onChange={set(k)} {...rest} /></label>
+      <input type={type} value={f[k]} onChange={set(k)} {...extra} /></label>
+  )
+  const area = (k, label) => (
+    <label className="fld"><span>{label}</span>
+      <textarea value={f[k]} onChange={set(k)} /></label>
   )
 
   return (
     <Modal wide title={existing ? 'Edit Delivery' : 'New Delivery'} onClose={onClose}>
-      <T>Deal &amp; Customer</T>
-      <In k="customer_name" label="Customer Name" />
+      {section('Deal & Customer')}
+      {field('customer_name', 'Customer Name')}
       <div className="fg2">
-        <In k="customer_phone" label="Customer Phone" type="tel" />
+        {field('customer_phone', 'Customer Phone', 'tel')}
         <label className="fld"><span>Driver 1</span>
           <select value={d1Other ? '__other__' : f.driver1_name}
             onChange={e => {
@@ -96,10 +102,7 @@ export default function DeliveryForm({ existing, drivers, onClose, onSaved }) {
             <option value="__other__">Other (write in name)</option>
           </select></label>
       </div>
-      {d1Other && (
-        <label className="fld"><span>Driver 1 Name (write in)</span>
-          <input value={f.driver1_name} onChange={set('driver1_name')} placeholder="Type driver name" /></label>
-      )}
+      {d1Other && field('driver1_name', 'Driver 1 Name (write in)', 'text', { placeholder: 'Type driver name' })}
       <label className="fld"><span>Driver 2 (optional)</span>
         <select value={d2Other ? '__other__' : f.driver2_name}
           onChange={e => {
@@ -111,65 +114,62 @@ export default function DeliveryForm({ existing, drivers, onClose, onSaved }) {
           {drivers.map(d => <option key={d.id} value={d.name}>{d.name}</option>)}
           <option value="__other__">Other (write in name)</option>
         </select></label>
-      {d2Other && (
-        <label className="fld"><span>Driver 2 Name (write in)</span>
-          <input value={f.driver2_name} onChange={set('driver2_name')} placeholder="Type driver name" /></label>
-      )}
-      <In k="delivery_address" label="Delivery Address" />
+      {d2Other && field('driver2_name', 'Driver 2 Name (write in)', 'text', { placeholder: 'Type driver name' })}
+      {field('delivery_address', 'Delivery Address')}
       <div className="fg2">
-        <In k="delivery_date" label="Delivery Date" type="date" />
-        <In k="delivery_time" label="Delivery Time" type="time" />
+        {field('delivery_date', 'Delivery Date', 'date')}
+        {field('delivery_time', 'Delivery Time', 'time')}
       </div>
 
-      <T>New Vehicle</T>
+      {section('New Vehicle')}
       <div className="fg2">
-        <In k="dealership_name" label="Dealership Name" />
-        <In k="dealership_contact" label="Dealership Contact" />
+        {field('dealership_name', 'Dealership Name')}
+        {field('dealership_contact', 'Dealership Contact')}
       </div>
       <div className="fg2">
-        <In k="dealership_phone" label="Dealership Phone" type="tel" />
-        <In k="vin" label="VIN" />
+        {field('dealership_phone', 'Dealership Phone', 'tel')}
+        {field('vin', 'VIN')}
       </div>
       <div className="fg2">
-        <In k="vyear" label="Year" />
-        <In k="make" label="Make" />
+        {field('vyear', 'Year')}
+        {field('make', 'Make')}
       </div>
       <div className="fg2">
-        <In k="model" label="Model" />
-        <In k="color" label="Color" />
+        {field('model', 'Model')}
+        {field('color', 'Color')}
       </div>
       <div className="fg2">
-        <In k="monthly_payment" label="Monthly Payment" />
-        <In k="miles_per_year" label="Miles Per Year" />
+        {field('monthly_payment', 'Monthly Payment')}
+        {field('miles_per_year', 'Miles Per Year')}
       </div>
-      <In k="contract_type" label="Type Of Contract" />
+      {field('contract_type', 'Type Of Contract')}
 
-      <T>Lease Return / Trade</T>
+      {section('Lease Return / Trade')}
       <label className="check" style={{ marginBottom: 10 }}>
         <input type="checkbox" checked={f.is_trade} onChange={set('is_trade')} /> Lease Return or Trade?
       </label>
       {f.is_trade && (
         <>
-          <div className="fg2"><In k="trade_year" label="Year" /><In k="trade_make" label="Make" /></div>
-          <div className="fg2"><In k="trade_model" label="Model" /><In k="trade_vin" label="Trade / Lease Return VIN" /></div>
+          <div className="fg2">{field('trade_year', 'Year')}{field('trade_make', 'Make')}</div>
+          <div className="fg2">{field('trade_model', 'Model')}{field('trade_vin', 'Trade / Lease Return VIN')}</div>
           <label className="fld"><span>Where does it go?</span>
             <select value={f.trade_destination} onChange={set('trade_destination')}>
               <option value="office">Back to Office</option>
               <option value="dealer">Dealer (lease return)</option>
             </select></label>
-          {f.trade_destination === 'dealer' && <In k="trade_return_dealer" label="Which Dealer (name & location)" placeholder="e.g. Audi of Freehold" />}
-          <label className="fld"><span>Additional Trade Notes</span><textarea value={f.trade_notes} onChange={set('trade_notes')} /></label>
+          {f.trade_destination === 'dealer' && field('trade_return_dealer', 'Which Dealer (name & location)', 'text', { placeholder: 'e.g. Audi of Freehold' })}
+          {area('trade_notes', 'Additional Trade Notes')}
         </>
       )}
 
-      <T>COD / Payment</T>
+      {section('COD / Payment')}
       <label className="check" style={{ marginBottom: 10 }}>
         <input type="checkbox" checked={f.cod_required} onChange={set('cod_required')} /> COD Required?
       </label>
       {f.cod_required && (
         <>
           <div className="fg2">
-            <In k="cod_amount" label="COD Amount" />
+            {field('cod_amount', 'COD Amount')}
             <label className="fld"><span>Made Out To</span>
               <select value={f.cod_made_out_to} onChange={set('cod_made_out_to')}>
                 <option>Dealer</option><option>LFG AUTO LLC</option>
@@ -183,8 +183,8 @@ export default function DeliveryForm({ existing, drivers, onClose, onSaved }) {
         </>
       )}
 
-      <T>Notes</T>
-      <label className="fld"><span>Admin Notes</span><textarea value={f.admin_notes} onChange={set('admin_notes')} /></label>
+      {section('Notes')}
+      {area('admin_notes', 'Admin Notes')}
 
       <div className="btnrow" style={{ marginTop: 18 }}>
         <button className="btn ghost" onClick={onClose}>Cancel</button>
