@@ -20,6 +20,8 @@ export default function DriverPortal() {
   const { profile, userName, signOut } = useAuth()
   const toast = useToast()
   const [rows, setRows] = useState([])
+  const [drivers, setDrivers] = useState([])
+  const [pick, setPick] = useState('all')
   const [deliverFor, setDeliverFor] = useState(null)
   const [issueFor, setIssueFor] = useState(null)
 
@@ -28,6 +30,8 @@ export default function DriverPortal() {
       .select('*').eq('archived', false)
       .order('delivery_date', { ascending: true })
     setRows(data || [])
+    const { data: drv } = await supabase.from('drivers_roster').select('*').order('name')
+    setDrivers(drv || [])
   }
   useEffect(() => { load() }, [])
 
@@ -67,12 +71,27 @@ export default function DriverPortal() {
 
       <div className="content">
         <div className="h1">Active Deliveries</div>
-        <div className="sub">Shared driver login · tap a button at each step · sign at delivery</div>
+        <div className="sub">Pick your name to see only your jobs · tap a button at each step · sign at delivery</div>
 
-        {rows.length === 0 && <div className="muted">No active deliveries right now.</div>}
+        <div className="row" style={{ gap: 8, flexWrap: 'wrap', margin: '12px 0 16px' }}>
+          <button className={'btn sm ' + (pick === 'all' ? 'gold' : 'ghost')} onClick={() => setPick('all')}>All</button>
+          {drivers.map(dr => (
+            <button key={dr.id} className={'btn sm ' + (pick === dr.name ? 'gold' : 'ghost')} onClick={() => setPick(dr.name)}>{dr.name}</button>
+          ))}
+          <button className={'btn sm ' + (pick === '__un__' ? 'gold' : 'ghost')} onClick={() => setPick('__un__')}>Unassigned</button>
+        </div>
+
+        {(() => {
+          const shown = rows.filter(d => {
+            if (pick === 'all') return true
+            if (pick === '__un__') return !d.driver1_name && !d.driver2_name
+            return d.driver1_name === pick || d.driver2_name === pick
+          })
+          return (<>
+        {shown.length === 0 && <div className="muted">No deliveries here right now.</div>}
 
         <div className="grid">
-          {rows.map(d => (
+          {shown.map(d => (
             <div key={d.id} className="card">
               <div className="dcard">
                 <div>
@@ -110,6 +129,8 @@ export default function DriverPortal() {
             </div>
           ))}
         </div>
+          </>)
+        })()}
       </div>
 
       {deliverFor && <DeliverModal d={deliverFor} onClose={() => setDeliverFor(null)}
