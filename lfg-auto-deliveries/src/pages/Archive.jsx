@@ -1,9 +1,13 @@
 import { useEffect, useState, useMemo } from 'react'
 import { supabase } from '../lib/supabase'
-import { fmtDateTime, vehicleLabel, downloadCSV } from '../lib/helpers'
+import { useAuth } from '../context/AuthContext'
+import { useToast } from '../components/Toast'
+import { fmtDateTime, vehicleLabel, downloadCSV, printDeliveryPacket } from '../lib/helpers'
 import Modal from '../components/Modal'
 
 export default function Archive() {
+  const { profile, userName } = useAuth()
+  const toast = useToast()
   const [rows, setRows] = useState([])
   const [q, setQ] = useState('')
   const [view, setView] = useState(null)
@@ -15,6 +19,13 @@ export default function Archive() {
     setRows(data || [])
   }
   useEffect(() => { load() }, [])
+
+  async function removeRecord(d) {
+    if (!confirm(`Permanently delete the archived delivery for ${d.customer_name}? This cannot be undone.`)) return
+    const { error } = await supabase.from('deliveries').delete().eq('id', d.id)
+    if (error) { toast("Couldn't delete — try again."); return }
+    toast('Archived delivery deleted'); setView(null); load()
+  }
 
   const filtered = useMemo(() => {
     const s = q.trim().toLowerCase()
@@ -121,6 +132,10 @@ export default function Archive() {
           </div>
           <Field label="Driver Notes" value={view.driver_notes} />
           <Field label="Admin Notes" value={view.admin_notes} />
+          <div className="btnrow" style={{ marginTop: 18, justifyContent: 'space-between' }}>
+            <button className="btn ghost sm" onClick={() => printDeliveryPacket(view)}>🖨 Print / PDF</button>
+            <button className="btn danger sm" onClick={() => removeRecord(view)}>🗑 Delete this record</button>
+          </div>
         </Modal>
       )}
     </>
