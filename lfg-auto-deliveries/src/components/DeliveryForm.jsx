@@ -108,7 +108,7 @@ export default function DeliveryForm({ existing, drivers, onClose, onSaved }) {
 
     await supabase.from('activity_log').insert({
       delivery_id: res.data.id, user_id: profile.id, user_name: userName,
-      action: existing ? 'edited the delivery' : 'created the delivery',
+      action: existing ? `edited ${f.customer_name}'s delivery` : `created the delivery for ${f.customer_name}`,
     })
     toast(existing ? 'Delivery updated' : 'Delivery created')
     onSaved?.()
