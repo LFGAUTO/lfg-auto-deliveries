@@ -11,6 +11,13 @@ function weekBounds() {
   return [start, end]
 }
 
+function monthBounds() {
+  const n = new Date()
+  const start = new Date(n.getFullYear(), n.getMonth(), 1); start.setHours(0, 0, 0, 0)
+  const end = new Date(n.getFullYear(), n.getMonth() + 1, 0); end.setHours(23, 59, 59, 999)
+  return [start, end]
+}
+
 export default function TVBoard() {
   const [rows, setRows] = useState([])
   const [now, setNow] = useState(new Date())
@@ -18,11 +25,11 @@ export default function TVBoard() {
   const wrapRef = useRef(null)
 
   async function load() {
-    // Pull active deliveries + anything delivered within this week, then filter by range.
-    const [wStart] = weekBounds()
+    // Pull active deliveries + anything delivered within this month, then filter by range.
+    const [mStart] = monthBounds()
     const { data } = await supabase.from('deliveries')
       .select('*')
-      .or(`archived.eq.false,delivered_at.gte.${wStart.toISOString()}`)
+      .or(`archived.eq.false,delivered_at.gte.${mStart.toISOString()}`)
       .order('delivery_time', { ascending: true })
     setRows(data || [])
   }
@@ -36,7 +43,12 @@ export default function TVBoard() {
 
   const today = todayISO()
   const [wStart, wEnd] = weekBounds()
+  const [mStart, mEnd] = monthBounds()
   const inRange = (d) => {
+    if (range === 'monthly') {
+      const day = d.delivery_date || (d.delivered_at ? d.delivered_at.slice(0, 10) : '')
+      return day >= mStart.toISOString().slice(0, 10) && day <= mEnd.toISOString().slice(0, 10)
+    }
     if (range === 'weekly') {
       const day = d.delivery_date || (d.delivered_at ? d.delivered_at.slice(0, 10) : '')
       return day >= wStart.toISOString().slice(0, 10) && day <= wEnd.toISOString().slice(0, 10)
@@ -56,7 +68,7 @@ export default function TVBoard() {
     else document.exitFullscreen?.()
   }
 
-  const rangeLabel = range === 'weekly' ? 'This Week' : 'Today'
+  const rangeLabel = range === 'monthly' ? 'This Month' : range === 'weekly' ? 'This Week' : 'Today'
   const summary = [
     { k: rangeLabel, n: board.length },
     { k: 'Unassigned', n: unassignedCount, c: '#e05757' },
@@ -70,8 +82,9 @@ export default function TVBoard() {
           <div className="tv-title">OPEN DELIVERY BOARD</div>
           <div className="tv-clock">LFG AUTO · {now.toLocaleString([], { weekday: 'long', hour: 'numeric', minute: '2-digit' })}</div>
           <div style={{ marginTop: 8, display: 'flex', gap: 8 }}>
-            <button className={'btn sm ' + (range !== 'weekly' ? 'gold' : 'ghost')} onClick={() => setRange('daily')}>Daily</button>
+            <button className={'btn sm ' + (range !== 'weekly' && range !== 'monthly' ? 'gold' : 'ghost')} onClick={() => setRange('daily')}>Daily</button>
             <button className={'btn sm ' + (range === 'weekly' ? 'gold' : 'ghost')} onClick={() => setRange('weekly')}>Weekly</button>
+            <button className={'btn sm ' + (range === 'monthly' ? 'gold' : 'ghost')} onClick={() => setRange('monthly')}>Monthly</button>
           </div>
         </div>
         <div className="tv-summary">
