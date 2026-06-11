@@ -35,19 +35,24 @@ export default function DriverPortal() {
     await supabase.from('activity_log').insert({ delivery_id: deliveryId, user_id: profile.id, user_name: userName, action })
   }
 
+  const STATUS_LABEL = { assigned: 'Assigned', at_dealer: 'At Dealer', en_route: 'En Route', delivered: 'Delivered', issue: 'Issue' }
+
   async function setStatus(d, status, stampField) {
+    const label = STATUS_LABEL[status] || status
+    if (!window.confirm(`Mark ${d.customer_name} as ${label}?`)) return
     const patch = { status }
     if (stampField) patch[stampField] = new Date().toISOString()
     const { error } = await supabase.from('deliveries').update(patch).eq('id', d.id)
     if (error) { toast('Error: ' + error.message); return }
-    await logActivity(d.id, `marked ${status.replace('_', ' ')}`)
+    await logActivity(d.id, `marked ${d.customer_name} — ${label}`)
     toast('Updated'); load()
   }
 
   async function tradePickedUp(d) {
+    if (!window.confirm(`Confirm trade / lease return picked up for ${d.customer_name}?`)) return
     const { error } = await supabase.from('deliveries').update({ trade_picked_up_at: new Date().toISOString() }).eq('id', d.id)
     if (error) { toast('Error: ' + error.message); return }
-    await logActivity(d.id, 'picked up the trade'); toast('Trade pickup saved'); load()
+    await logActivity(d.id, `picked up the trade for ${d.customer_name}`); toast('Trade pickup saved'); load()
   }
 
   return (
@@ -73,9 +78,11 @@ export default function DriverPortal() {
                 <div>
                   <div className="cn">{d.customer_name}</div>
                   <div className="meta">{vehicleLabel(d)}</div>
+                  <div className="meta gold">🔑 VIN: {d.vin || '—'}</div>
                   {(d.driver1_name || d.driver2_name) && <div className="meta">🧑‍✈️ {[d.driver1_name, d.driver2_name].filter(Boolean).join(' & ')}</div>}
                   <div className="meta">📍 {d.delivery_address || '—'}</div>
-                  <div className="meta">📞 {d.customer_phone || '—'} · 🕒 {d.delivery_time || '—'}</div>
+                  <div className="meta">🗓 {d.delivery_date || '—'} · 🕒 {d.delivery_time || '—'}</div>
+                  <div className="meta">📞 {d.customer_phone || '—'}</div>
                   {d.dealership_name && <div className="meta">🏢 {d.dealership_name} {d.dealership_phone ? `· ${d.dealership_phone}` : ''}</div>}
                   {d.cod_required && <div className="meta gold">💵 COD {d.cod_amount} ({d.cod_type}) to {d.cod_made_out_to}</div>}
                   {d.admin_notes && <div className="meta">📝 {d.admin_notes}</div>}
@@ -111,7 +118,7 @@ export default function DriverPortal() {
             ...patch, status: 'delivered', delivered_at: new Date().toISOString(), archived: true,
           }).eq('id', deliverFor.id)
           if (error) { toast('Error: ' + error.message); return }
-          await logActivity(deliverFor.id, 'completed the delivery')
+          await logActivity(deliverFor.id, `completed ${deliverFor.customer_name}'s delivery`)
           toast('Delivered & archived'); setDeliverFor(null); load()
         }} />}
 
@@ -121,7 +128,7 @@ export default function DriverPortal() {
           const patch = { status: 'issue' }
           if (issueFor.status !== 'issue') patch.prev_status = issueFor.status
           await supabase.from('deliveries').update(patch).eq('id', issueFor.id)
-          await logActivity(issueFor.id, `reported an issue: ${type}`)
+          await logActivity(issueFor.id, `reported an issue on ${issueFor.customer_name}: ${type}`)
           toast('Issue reported'); setIssueFor(null); load()
         }} />}
     </div>
