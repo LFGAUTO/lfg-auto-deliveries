@@ -10,6 +10,7 @@ export default function Layout() {
     { to: '/deliveries', icon: '🚗', label: 'Deliveries' },
     { to: '/drivers', icon: '👤', label: 'Drivers' },
     { to: '/archive', icon: '🗄️', label: 'Archive' },
+    { to: '/reports', icon: '🧾', label: 'Reports' },
     { to: '/board', icon: '📺', label: 'TV Board' },
   ]
 
