@@ -87,7 +87,7 @@ export default function Archive() {
           <div className="section-title">Dealership</div>
           <Field label="Dealer" value={view.dealership_name} />
           <Field label="Contact" value={view.dealership_contact} />
-          <Field label="Phone" value={view.dealership_phone} />
+          <Field label="Salesman" value={view.dealership_phone} />
 
           <div className="section-title">Customer & Delivery</div>
           <Field label="Phone" value={view.customer_phone} />
