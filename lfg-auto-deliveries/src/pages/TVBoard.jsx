@@ -1,6 +1,7 @@
 import { useEffect, useState, useRef } from 'react'
 import { supabase } from '../lib/supabase'
 import { STATUS, fmtTime, vehicleLabel, todayISO } from '../lib/helpers'
+import LiveMap from './LiveMap'
 
 const COLS = ['assigned', 'at_dealer', 'en_route', 'delivered', 'issue']
 
@@ -21,7 +22,8 @@ function monthBounds() {
 export default function TVBoard() {
   const [rows, setRows] = useState([])
   const [now, setNow] = useState(new Date())
-  const [range, setRange] = useState('daily')   // 'daily' | 'weekly'
+  const [range, setRange] = useState('daily')   // 'daily' | 'weekly' | 'monthly'
+  const [showMap, setShowMap] = useState(false)
   const wrapRef = useRef(null)
 
   async function load() {
@@ -82,9 +84,10 @@ export default function TVBoard() {
           <div className="tv-title">OPEN DELIVERY BOARD</div>
           <div className="tv-clock">LFG AUTO · {now.toLocaleString([], { weekday: 'long', hour: 'numeric', minute: '2-digit' })}</div>
           <div style={{ marginTop: 8, display: 'flex', gap: 8 }}>
-            <button className={'btn sm ' + (range !== 'weekly' && range !== 'monthly' ? 'gold' : 'ghost')} onClick={() => setRange('daily')}>Daily</button>
-            <button className={'btn sm ' + (range === 'weekly' ? 'gold' : 'ghost')} onClick={() => setRange('weekly')}>Weekly</button>
-            <button className={'btn sm ' + (range === 'monthly' ? 'gold' : 'ghost')} onClick={() => setRange('monthly')}>Monthly</button>
+            <button className={'btn sm ' + (range !== 'weekly' && range !== 'monthly' && !showMap ? 'gold' : 'ghost')} onClick={() => { setRange('daily'); setShowMap(false) }}>Daily</button>
+            <button className={'btn sm ' + (range === 'weekly' && !showMap ? 'gold' : 'ghost')} onClick={() => { setRange('weekly'); setShowMap(false) }}>Weekly</button>
+            <button className={'btn sm ' + (range === 'monthly' && !showMap ? 'gold' : 'ghost')} onClick={() => { setRange('monthly'); setShowMap(false) }}>Monthly</button>
+            <button className={'btn sm ' + (showMap ? 'gold' : 'ghost')} onClick={() => setShowMap(m => !m)}>🗺️ Live Map</button>
           </div>
         </div>
         <div className="tv-summary">
@@ -98,6 +101,9 @@ export default function TVBoard() {
         </div>
       </div>
 
+      {showMap
+        ? <div style={{ padding: 12 }}><LiveMap height="80vh" /></div>
+        : (
       <div className="tv-cols">
         {COLS.map(s => (
           <div className="tv-col" key={s}>
@@ -117,6 +123,7 @@ export default function TVBoard() {
           </div>
         ))}
       </div>
+        )}
     </div>
   )
 }
