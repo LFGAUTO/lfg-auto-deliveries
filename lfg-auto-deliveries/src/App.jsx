@@ -7,6 +7,7 @@ import Deliveries from './pages/Deliveries'
 import Drivers from './pages/Drivers'
 import Archive from './pages/Archive'
 import Reports from './pages/Reports'
+import LiveMap from './pages/LiveMap'
 import TVBoard from './pages/TVBoard'
 import DriverPortal from './pages/DriverPortal'
 
@@ -40,6 +41,7 @@ export default function App() {
           <Route path="/drivers" element={<Drivers />} />
           <Route path="/archive" element={<Archive />} />
           <Route path="/reports" element={<Reports />} />
+          <Route path="/livemap" element={<div><div className="h1">Live Map</div><div className="sub" style={{ marginBottom: 12 }}>Drivers currently en route</div><LiveMap /></div>} />
         </Route>
       )}
 
