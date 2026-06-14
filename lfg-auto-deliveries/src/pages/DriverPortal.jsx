@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 import { useToast } from '../components/Toast'
-import { ISSUE_TYPES, vehicleLabel, fmtTime } from '../lib/helpers'
+import { ISSUE_TYPES, vehicleLabel, fmtTime, printDeliveryPacket } from '../lib/helpers'
 import StatusPill from '../components/StatusPill'
 import Modal from '../components/Modal'
 import SignaturePad from '../components/SignaturePad'
@@ -125,6 +125,7 @@ export default function DriverPortal() {
                 {d.is_trade && <button className="btn ghost" onClick={() => tradePickedUp(d)}>
                   TRADE PICKED UP {d.trade_picked_up_at ? `✓ ${fmtTime(d.trade_picked_up_at)}` : ''}</button>}
                 <button className="btn danger" onClick={() => setIssueFor(d)}>REPORT ISSUE</button>
+                <button className="btn ghost" onClick={() => printDeliveryPacket(d)}>🖨 Checklist PDF</button>
               </div>
             </div>
           ))}
@@ -162,6 +163,8 @@ function DeliverModal({ d, onClose, onDone }) {
   const [ok, setOk] = useState(false)
   const [notes, setNotes] = useState('')
   const [tasks, setTasks] = useState({ bt: false, box: false, app: false, review: false })
+  const [eContract, setEContract] = useState(false)
+  const [refusedPic, setRefusedPic] = useState(false)
   const [busy, setBusy] = useState(false)
   const [clientFile, setClientFile] = useState(null)
   const [contractFile, setContractFile] = useState(null)
@@ -172,18 +175,19 @@ function DeliverModal({ d, onClose, onDone }) {
   async function submit() {
     if (!sig) { toast('Driver signature required'); return }
     if (!ok) { toast('Confirm acceptable condition'); return }
-    if (!clientFile) { toast('Client photo required'); return }
-    if (!contractFile) { toast('Contract photo required'); return }
+    if (!clientFile && !refusedPic) { toast('Client photo required (or mark “Customer refused photo”)'); return }
+    if (!contractFile && !eContract) { toast('Contract photo required (or mark “E-Contract”)'); return }
     if (d.is_trade && !tradeFile) { toast('Trade / lease return photo required'); return }
     setBusy(true)
-    const client_photo_url = await uploadPhoto(clientFile, 'client')
-    const contract_photo_url = await uploadPhoto(contractFile, 'contract')
+    const client_photo_url = (clientFile && !refusedPic) ? await uploadPhoto(clientFile, 'client') : null
+    const contract_photo_url = (contractFile && !eContract) ? await uploadPhoto(contractFile, 'contract') : null
     const trade_photo_url = d.is_trade ? await uploadPhoto(tradeFile, 'trade') : null
     await onDone({
       driver_signature: sig, delivered_condition_ok: true,
       driver_notes: notes || null, client_photo_url, contract_photo_url, trade_photo_url,
       task_bluetooth: tasks.bt, task_lfg_box: tasks.box, task_app: tasks.app, task_review: tasks.review,
       task_photo_client: !!client_photo_url, task_photo_contract: !!contract_photo_url,
+      e_contract: eContract, client_photo_refused: refusedPic,
     })
     setBusy(false)
   }
@@ -202,11 +206,17 @@ function DeliverModal({ d, onClose, onDone }) {
       <label className="check"><input type="checkbox" checked={tasks.app} onChange={tog('app')} /> Installed Vehicle App</label>
       <label className="check"><input type="checkbox" checked={tasks.review} onChange={tog('review')} /> Asked for Review</label>
       <div style={{ height: 10 }} />
-      <label className="fld"><span>Client Photo (required)</span><input type="file" accept="image/*" capture="environment" onChange={e => setClientFile(e.target.files[0])} /></label>
-      <label className="fld"><span>Contract Photo (required)</span><input type="file" accept="image/*" capture="environment" onChange={e => setContractFile(e.target.files[0])} /></label>
+      <label className="check"><input type="checkbox" checked={eContract} onChange={e => setEContract(e.target.checked)} /> E-Contract (no paper contract to photo)</label>
+      <label className="check"><input type="checkbox" checked={refusedPic} onChange={e => setRefusedPic(e.target.checked)} /> Customer refused photo</label>
+      <div style={{ height: 10 }} />
+      {!refusedPic && <label className="fld"><span>Client Photo (required)</span><input type="file" accept="image/*" capture="environment" onChange={e => setClientFile(e.target.files[0])} /></label>}
+      {!eContract && <label className="fld"><span>Contract Photo (required)</span><input type="file" accept="image/*" capture="environment" onChange={e => setContractFile(e.target.files[0])} /></label>}
       {d.is_trade && <label className="fld"><span>Trade / Lease Return Photo (required)</span><input type="file" accept="image/*" capture="environment" onChange={e => setTradeFile(e.target.files[0])} /></label>}
       <label className="fld"><span>Notes (optional)</span><textarea value={notes} onChange={e => setNotes(e.target.value)} /></label>
       <button className="btn green xl" onClick={submit} disabled={busy}>{busy ? 'Saving…' : 'Confirm Delivered'}</button>
+      <div style={{ marginTop: 12, padding: 10, borderRadius: 8, background: 'rgba(201,162,39,.12)', border: '1px solid #5a4a17', color: '#e8d9a8', fontSize: 13, textAlign: 'center', fontWeight: 700 }}>
+        ⚠ MUST COMPLETE IN FULL TO HAVE THIS DELIVERY ADDED TO THE TIMESHEET
+      </div>
     </Modal>
   )
 }
