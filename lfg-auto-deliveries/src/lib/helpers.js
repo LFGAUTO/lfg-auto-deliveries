@@ -106,7 +106,7 @@ export function printDeliveryPacket(d) {
         <table>
           ${row('Dealership', esc(d.dealership_name))}
           ${row('Contact', esc(d.dealership_contact))}
-          ${row('Phone', esc(d.dealership_phone))}
+          ${row('Salesman', esc(d.dealership_phone))}
         </table>
       </div>
     </div>
