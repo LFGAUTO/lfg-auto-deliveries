@@ -171,7 +171,7 @@ export default function DeliveryForm({ existing, drivers, onClose, onSaved }) {
         {field('dealership_contact', 'Dealership Contact')}
       </div>
       <div className="fg2">
-        {field('dealership_phone', 'Dealership Phone', 'tel')}
+        {field('dealership_phone', 'Salesman')}
         {field('vin', 'VIN')}
       </div>
       <div className="fg2">
