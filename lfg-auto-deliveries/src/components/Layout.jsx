@@ -11,6 +11,7 @@ export default function Layout() {
     { to: '/drivers', icon: '👤', label: 'Drivers' },
     { to: '/archive', icon: '🗄️', label: 'Archive' },
     { to: '/reports', icon: '🧾', label: 'Reports' },
+    { to: '/livemap', icon: '🗺️', label: 'Live Map' },
     { to: '/board', icon: '📺', label: 'TV Board' },
   ]
 
