@@ -69,7 +69,9 @@ export default function Reports() {
     const rows = []
     tallyNames.forEach(name => tally[name].forEach(d => rows.push({
       Driver: name, Customer: d.customer_name, Vehicle: vehicleLabel(d), VIN: d.vin || '',
-      Dealer: d.dealership_name || '', Delivered: d.delivered_at ? new Date(d.delivered_at).toLocaleString() : '',
+      Dealer: d.dealership_name || '',
+      AtDealer: d.at_dealer_at ? new Date(d.at_dealer_at).toLocaleString() : '',
+      Delivered: d.delivered_at ? new Date(d.delivered_at).toLocaleString() : '',
     })))
     if (!rows.length) { toast('No completed deliveries in this week'); return }
     downloadCSV(rows, `lfg-timesheet-${wStart.toISOString().slice(0, 10)}.csv`)
@@ -123,8 +125,9 @@ export default function Reports() {
                 </div>
                 <hr />
                 {tally[name].map(d => (
-                  <div key={d.id} className="meta" style={{ marginTop: 4 }}>
-                    • {d.customer_name} — {vehicleLabel(d)} {d.delivered_at ? `· ${fmtDateTime(d.delivered_at)}` : ''}
+                  <div key={d.id} className="meta" style={{ marginTop: 6 }}>
+                    • {d.customer_name} — {vehicleLabel(d)}<br />
+                    <span style={{ color: '#9bd' }}>🏁 At dealer: {d.at_dealer_at ? fmtDateTime(d.at_dealer_at) : '—'} → ✅ Delivered: {d.delivered_at ? fmtDateTime(d.delivered_at) : '—'}</span>
                   </div>
                 ))}
               </div>
