@@ -35,6 +35,34 @@ export default function DriverPortal() {
   }
   useEffect(() => { load() }, [])
 
+  // Live location sharing: ON while the selected driver has an EN ROUTE job, OFF otherwise.
+  useEffect(() => {
+    const realName = (pick !== 'all' && pick !== '__un__') ? pick : null
+    const myEnRoute = realName
+      ? rows.find(d => d.status === 'en_route' && (d.driver1_name === realName || d.driver2_name === realName))
+      : null
+
+    if (!realName || !myEnRoute || !navigator.geolocation) {
+      if (realName) supabase.from('live_locations').delete().eq('driver_name', realName) // stop sharing
+      return
+    }
+
+    let stopped = false
+    const send = () => navigator.geolocation.getCurrentPosition(
+      pos => {
+        if (stopped) return
+        supabase.from('live_locations').upsert({
+          driver_name: realName, lat: pos.coords.latitude, lng: pos.coords.longitude,
+          customer: myEnRoute.customer_name, delivery_id: myEnRoute.id, updated_at: new Date().toISOString(),
+        })
+      },
+      () => {}, { enableHighAccuracy: true, maximumAge: 10000, timeout: 15000 }
+    )
+    send()
+    const t = setInterval(send, 25000)
+    return () => { stopped = true; clearInterval(t) }
+  }, [pick, rows])
+
   async function logActivity(deliveryId, action) {
     await supabase.from('activity_log').insert({ delivery_id: deliveryId, user_id: profile.id, user_name: userName, action })
   }
@@ -71,7 +99,7 @@ export default function DriverPortal() {
 
       <div className="content">
         <div className="h1">Active Deliveries</div>
-        <div className="sub">Pick your name to see only your jobs · tap a button at each step · sign at delivery</div>
+        <div className="sub">Pick your name to see your jobs and share your live location once you tap EN ROUTE · keep this screen open while driving</div>
 
         <div className="row" style={{ gap: 8, flexWrap: 'wrap', margin: '12px 0 16px' }}>
           <button className={'btn sm ' + (pick === 'all' ? 'gold' : 'ghost')} onClick={() => setPick('all')}>All</button>
