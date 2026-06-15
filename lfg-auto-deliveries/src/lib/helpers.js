@@ -54,8 +54,9 @@ export function printDeliveryPacket(d) {
   const driver = [d.driver1_name, d.driver2_name].filter(Boolean).join(' & ') || 'Unassigned'
   const row = (a, b) => `<tr><td class="l">${a}</td><td>${b}</td></tr>`
   const tradeBlock = d.is_trade ? `
-    <h3>Trade / Lease Return</h3>
+    <h3>${d.trade_kind === 'lease_return' ? 'Lease Return' : 'Trade'}</h3>
     <table>
+      ${row('Type', d.trade_kind === 'lease_return' ? 'Lease Return' : 'Trade')}
       ${row('Vehicle', esc([d.trade_year, d.trade_make, d.trade_model].filter(Boolean).join(' ')))}
       ${row('VIN', esc(d.trade_vin))}
       ${row('Goes to', d.trade_destination === 'dealer' ? esc(d.trade_return_dealer || 'Dealer') : 'Back to Office')}
