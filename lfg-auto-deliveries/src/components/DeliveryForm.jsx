@@ -11,7 +11,7 @@ const EMPTY = {
   dealership_name: '', dealership_contact: '', dealership_phone: '',
   vin: '', vyear: '', make: '', model: '', color: '',
   monthly_payment: '', miles_per_year: '', contract_type: '',
-  is_trade: false, trade_year: '', trade_make: '', trade_model: '', trade_vin: '', trade_notes: '',
+  is_trade: false, trade_kind: 'trade', trade_year: '', trade_make: '', trade_model: '', trade_vin: '', trade_notes: '',
   trade_destination: 'office', trade_return_dealer: '',
   cod_required: false, cod_amount: '', cod_made_out_to: 'Dealer', cod_type: 'Check', cod_received: false,
   odometer: '', fuel_level: '', damage_noted: false, damage_notes: '',
@@ -81,6 +81,7 @@ export default function DeliveryForm({ existing, drivers, onClose, onSaved }) {
       miles_per_year: clean(f.miles_per_year),
       contract_type: clean(f.contract_type),
       is_trade: f.is_trade,
+      trade_kind: f.trade_kind,
       trade_year: clean(f.trade_year),
       trade_make: clean(f.trade_make),
       trade_model: clean(f.trade_model),
@@ -194,6 +195,11 @@ export default function DeliveryForm({ existing, drivers, onClose, onSaved }) {
       </label>
       {f.is_trade && (
         <>
+          <label className="fld"><span>Which is it?</span>
+            <select value={f.trade_kind} onChange={set('trade_kind')}>
+              <option value="trade">Trade</option>
+              <option value="lease_return">Lease Return</option>
+            </select></label>
           <div className="fg2">{field('trade_year', 'Year')}{field('trade_make', 'Make')}</div>
           <div className="fg2">{field('trade_model', 'Model')}{field('trade_vin', 'Trade / Lease Return VIN')}</div>
           <label className="fld"><span>Where does it go?</span>
