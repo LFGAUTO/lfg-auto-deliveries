@@ -100,7 +100,8 @@ export default function Archive() {
           <Field label="Delivered" value={fmtDateTime(view.delivered_at)} />
           {view.is_trade && <Field label="Trade Picked Up" value={fmtDateTime(view.trade_picked_up_at)} />}
 
-          {view.is_trade && (<><div className="section-title">Trade / Lease Return</div>
+          {view.is_trade && (<><div className="section-title">{view.trade_kind === 'lease_return' ? 'Lease Return' : 'Trade'}</div>
+            <Field label="Type" value={view.trade_kind === 'lease_return' ? 'Lease Return' : 'Trade'} />
             <Field label="Vehicle" value={`${view.trade_year || ''} ${view.trade_make || ''} ${view.trade_model || ''}`} />
             <Field label="VIN" value={view.trade_vin} />
             <Field label="Goes To" value={view.trade_destination === 'dealer' ? `Dealer — ${view.trade_return_dealer || ''}` : 'Back to Office'} />
