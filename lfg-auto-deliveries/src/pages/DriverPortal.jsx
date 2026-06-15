@@ -135,7 +135,7 @@ export default function DriverPortal() {
                   {d.admin_notes && <div className="meta">📝 {d.admin_notes}</div>}
                   {d.is_trade && (
                     <div style={{ marginTop: 8, padding: 10, border: '1px solid #1d6bb6', borderRadius: 10, background: 'rgba(29,107,182,.12)' }}>
-                      <div style={{ fontWeight: 800, color: '#7db8ec', fontSize: 12, letterSpacing: 1 }}>🔁 PICKING UP</div>
+                      <div style={{ fontWeight: 800, color: '#7db8ec', fontSize: 12, letterSpacing: 1 }}>🔁 PICKING UP — {d.trade_kind === 'lease_return' ? 'LEASE RETURN' : 'TRADE'}</div>
                       <div className="meta" style={{ color: '#cfe2f2' }}>{[d.trade_year, d.trade_make, d.trade_model].filter(Boolean).join(' ') || 'Trade / lease return'} · VIN {d.trade_vin || '—'}</div>
                       <div className="meta" style={{ color: '#cfe2f2' }}>➡ Goes to: <strong>{d.trade_destination === 'dealer' ? (d.trade_return_dealer || 'Dealer') : 'Back to Office'}</strong></div>
                       {d.trade_notes && <div className="meta" style={{ color: '#cfe2f2' }}>📝 {d.trade_notes}</div>}
