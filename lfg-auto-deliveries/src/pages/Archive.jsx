@@ -130,6 +130,9 @@ export default function Archive() {
             {view.client_photo_url && <a href={view.client_photo_url} target="_blank" rel="noreferrer"><button className="btn ghost sm">Client Photo</button></a>}
             {view.contract_photo_url && <a href={view.contract_photo_url} target="_blank" rel="noreferrer"><button className="btn ghost sm">Contract Photo</button></a>}
             {view.trade_photo_url && <a href={view.trade_photo_url} target="_blank" rel="noreferrer"><button className="btn ghost sm">Trade Photo</button></a>}
+            {(view.extra_photos || []).map((u, i) => (
+              <a key={i} href={u} target="_blank" rel="noreferrer"><button className="btn ghost sm">Extra {i + 1}</button></a>
+            ))}
           </div>
           <Field label="Driver Notes" value={view.driver_notes} />
           <Field label="Admin Notes" value={view.admin_notes} />
