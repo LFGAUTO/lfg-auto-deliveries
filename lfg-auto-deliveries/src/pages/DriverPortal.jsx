@@ -197,6 +197,7 @@ function DeliverModal({ d, onClose, onDone }) {
   const [clientFile, setClientFile] = useState(null)
   const [contractFile, setContractFile] = useState(null)
   const [tradeFile, setTradeFile] = useState(null)
+  const [extraFiles, setExtraFiles] = useState([])
 
   const tog = (k) => () => setTasks(p => ({ ...p, [k]: !p[k] }))
 
@@ -210,9 +211,12 @@ function DeliverModal({ d, onClose, onDone }) {
     const client_photo_url = (clientFile && !refusedPic) ? await uploadPhoto(clientFile, 'client') : null
     const contract_photo_url = (contractFile && !eContract) ? await uploadPhoto(contractFile, 'contract') : null
     const trade_photo_url = d.is_trade ? await uploadPhoto(tradeFile, 'trade') : null
+    const extra_photos = []
+    for (const f of extraFiles) { const u = await uploadPhoto(f, 'extra'); if (u) extra_photos.push(u) }
     await onDone({
       driver_signature: sig, delivered_condition_ok: true,
       driver_notes: notes || null, client_photo_url, contract_photo_url, trade_photo_url,
+      extra_photos,
       task_bluetooth: tasks.bt, task_lfg_box: tasks.box, task_app: tasks.app, task_review: tasks.review,
       task_photo_client: !!client_photo_url, task_photo_contract: !!contract_photo_url,
       e_contract: eContract, client_photo_refused: refusedPic,
@@ -237,9 +241,12 @@ function DeliverModal({ d, onClose, onDone }) {
       <label className="check"><input type="checkbox" checked={eContract} onChange={e => setEContract(e.target.checked)} /> E-Contract (no paper contract to photo)</label>
       <label className="check"><input type="checkbox" checked={refusedPic} onChange={e => setRefusedPic(e.target.checked)} /> Customer refused photo</label>
       <div style={{ height: 10 }} />
-      {!refusedPic && <label className="fld"><span>Client Photo (required)</span><input type="file" accept="image/*" capture="environment" onChange={e => setClientFile(e.target.files[0])} /></label>}
-      {!eContract && <label className="fld"><span>Contract Photo (required)</span><input type="file" accept="image/*" capture="environment" onChange={e => setContractFile(e.target.files[0])} /></label>}
-      {d.is_trade && <label className="fld"><span>Trade / Lease Return Photo (required)</span><input type="file" accept="image/*" capture="environment" onChange={e => setTradeFile(e.target.files[0])} /></label>}
+      {!refusedPic && <label className="fld"><span>Client Photo (required)</span><input type="file" accept="image/*" onChange={e => setClientFile(e.target.files[0])} /></label>}
+      {!eContract && <label className="fld"><span>Contract Photo (required)</span><input type="file" accept="image/*" onChange={e => setContractFile(e.target.files[0])} /></label>}
+      {d.is_trade && <label className="fld"><span>Trade / Lease Return Photo (required)</span><input type="file" accept="image/*" onChange={e => setTradeFile(e.target.files[0])} /></label>}
+      <label className="fld"><span>Additional Photos (optional — pick any from your phone)</span>
+        <input type="file" accept="image/*" multiple onChange={e => setExtraFiles([...e.target.files])} /></label>
+      {extraFiles.length > 0 && <div className="meta" style={{ marginTop: -6, marginBottom: 6 }}>{extraFiles.length} photo{extraFiles.length === 1 ? '' : 's'} selected</div>}
       <label className="fld"><span>Notes (optional)</span><textarea value={notes} onChange={e => setNotes(e.target.value)} /></label>
       <button className="btn green xl" onClick={submit} disabled={busy}>{busy ? 'Saving…' : 'Confirm Delivered'}</button>
       <div style={{ marginTop: 12, padding: 10, borderRadius: 8, background: 'rgba(201,162,39,.12)', border: '1px solid #5a4a17', color: '#e8d9a8', fontSize: 13, textAlign: 'center', fontWeight: 700 }}>
@@ -270,7 +277,7 @@ function IssueModal({ d, onClose, onDone }) {
       <label className="fld"><span>Issue Type</span>
         <select value={type} onChange={e => setType(e.target.value)}>{ISSUE_TYPES.map(t => <option key={t}>{t}</option>)}</select></label>
       <label className="fld"><span>What happened? (required)</span><textarea value={note} onChange={e => setNote(e.target.value)} /></label>
-      <label className="fld"><span>Photo (optional)</span><input type="file" accept="image/*" capture="environment" onChange={e => setFile(e.target.files[0])} /></label>
+      <label className="fld"><span>Photo (optional)</span><input type="file" accept="image/*" onChange={e => setFile(e.target.files[0])} /></label>
       <button className="btn danger xl" onClick={submit} disabled={busy}>{busy ? 'Sending…' : 'Submit Issue'}</button>
     </Modal>
   )
