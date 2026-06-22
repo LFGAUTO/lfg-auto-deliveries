@@ -187,48 +187,83 @@ export default function DriverPortal() {
 
 function DeliverModal({ d, onClose, onDone }) {
   const toast = useToast()
-  const [sig, setSig] = useState(null)
-  const [ok, setOk] = useState(false)
-  const [notes, setNotes] = useState('')
-  const [tasks, setTasks] = useState({ bt: false, box: false, app: false, review: false })
-  const [eContract, setEContract] = useState(false)
-  const [refusedPic, setRefusedPic] = useState(false)
+  const KEY = `lfg_deliver_draft_${d.id}`
+  const saved = (() => { try { return JSON.parse(localStorage.getItem(KEY) || '{}') } catch { return {} } })()
+
+  const [sig, setSig] = useState(saved.sig || null)
+  const [ok, setOk] = useState(saved.ok || false)
+  const [notes, setNotes] = useState(saved.notes || '')
+  const [tasks, setTasks] = useState(saved.tasks || { bt: false, box: false, app: false, review: false })
+  const [eContract, setEContract] = useState(saved.eContract || false)
+  const [refusedPic, setRefusedPic] = useState(saved.refusedPic || false)
+  const [clientUrl, setClientUrl] = useState(saved.clientUrl || null)
+  const [contractUrl, setContractUrl] = useState(saved.contractUrl || null)
+  const [tradeUrl, setTradeUrl] = useState(saved.tradeUrl || null)
+  const [extraUrls, setExtraUrls] = useState(saved.extraUrls || [])
+  const [uploading, setUploading] = useState(0)
   const [busy, setBusy] = useState(false)
-  const [clientFile, setClientFile] = useState(null)
-  const [contractFile, setContractFile] = useState(null)
-  const [tradeFile, setTradeFile] = useState(null)
-  const [extraFiles, setExtraFiles] = useState([])
+
+  // Auto-save progress to the phone so a call / lock screen / app switch can't wipe it.
+  useEffect(() => {
+    const draft = { sig, ok, notes, tasks, eContract, refusedPic, clientUrl, contractUrl, tradeUrl, extraUrls }
+    try { localStorage.setItem(KEY, JSON.stringify(draft)) } catch {}
+  }, [sig, ok, notes, tasks, eContract, refusedPic, clientUrl, contractUrl, tradeUrl, extraUrls])
 
   const tog = (k) => () => setTasks(p => ({ ...p, [k]: !p[k] }))
 
+  // Photos upload the moment they're picked, so they're saved even if the app reloads.
+  async function pick(file, folder, setter) {
+    if (!file) return
+    setUploading(n => n + 1)
+    const url = await uploadPhoto(file, folder)
+    setUploading(n => n - 1)
+    if (url) setter(url); else toast('Photo upload failed - try again')
+  }
+  async function pickExtra(files) {
+    if (!files.length) return
+    setUploading(n => n + 1)
+    const urls = []
+    for (const f of files) { const u = await uploadPhoto(f, 'extra'); if (u) urls.push(u) }
+    setUploading(n => n - 1)
+    setExtraUrls(prev => [...prev, ...urls])
+  }
+
   async function submit() {
+    if (uploading > 0) { toast('Photos still uploading - one moment'); return }
     if (!sig) { toast('Driver signature required'); return }
     if (!ok) { toast('Confirm acceptable condition'); return }
-    if (!clientFile && !refusedPic) { toast('Client photo required (or mark “Customer refused photo”)'); return }
-    if (!contractFile && !eContract) { toast('Contract photo required (or mark “E-Contract”)'); return }
-    if (d.is_trade && !tradeFile) { toast('Trade / lease return photo required'); return }
+    if (!clientUrl && !refusedPic) { toast('Client photo required (or mark Customer refused photo)'); return }
+    if (!contractUrl && !eContract) { toast('Contract photo required (or mark E-Contract)'); return }
+    if (d.is_trade && !tradeUrl) { toast('Trade / lease return photo required'); return }
     setBusy(true)
-    const client_photo_url = (clientFile && !refusedPic) ? await uploadPhoto(clientFile, 'client') : null
-    const contract_photo_url = (contractFile && !eContract) ? await uploadPhoto(contractFile, 'contract') : null
-    const trade_photo_url = d.is_trade ? await uploadPhoto(tradeFile, 'trade') : null
-    const extra_photos = []
-    for (const f of extraFiles) { const u = await uploadPhoto(f, 'extra'); if (u) extra_photos.push(u) }
     await onDone({
       driver_signature: sig, delivered_condition_ok: true,
-      driver_notes: notes || null, client_photo_url, contract_photo_url, trade_photo_url,
-      extra_photos,
+      driver_notes: notes || null,
+      client_photo_url: refusedPic ? null : clientUrl,
+      contract_photo_url: eContract ? null : contractUrl,
+      trade_photo_url: d.is_trade ? tradeUrl : null,
+      extra_photos: extraUrls,
       task_bluetooth: tasks.bt, task_lfg_box: tasks.box, task_app: tasks.app, task_review: tasks.review,
-      task_photo_client: !!client_photo_url, task_photo_contract: !!contract_photo_url,
+      task_photo_client: !!clientUrl, task_photo_contract: !!contractUrl,
       e_contract: eContract, client_photo_refused: refusedPic,
     })
+    try { localStorage.removeItem(KEY) } catch {}
     setBusy(false)
   }
 
+  const photoRow = (label, url, onFile) => (
+    <label className="fld"><span>{label}{url ? ' - uploaded' : ''}</span>
+      <input type="file" accept="image/*" onChange={e => onFile(e.target.files[0])} />
+      {url && <a href={url} target="_blank" rel="noreferrer" className="meta" style={{ color: '#9bd' }}>view photo</a>}
+    </label>
+  )
+
   return (
     <Modal title="Complete Delivery" onClose={onClose}>
-      <div className="sub">{d.customer_name} · {vehicleLabel(d)}</div>
+      <div className="sub">{d.customer_name} - {vehicleLabel(d)}</div>
       <label className="fld"><span>Driver Signature</span></label>
       <SignaturePad onChange={setSig} />
+      {sig && <div className="meta" style={{ color: '#7bd88f', marginTop: -4 }}>Signature saved (sign again only if you need to redo it)</div>}
       <label className="check" style={{ margin: '14px 0' }}>
         <input type="checkbox" checked={ok} onChange={e => setOk(e.target.checked)} /> Delivered in acceptable condition
       </label>
@@ -241,17 +276,19 @@ function DeliverModal({ d, onClose, onDone }) {
       <label className="check"><input type="checkbox" checked={eContract} onChange={e => setEContract(e.target.checked)} /> E-Contract (no paper contract to photo)</label>
       <label className="check"><input type="checkbox" checked={refusedPic} onChange={e => setRefusedPic(e.target.checked)} /> Customer refused photo</label>
       <div style={{ height: 10 }} />
-      {!refusedPic && <label className="fld"><span>Client Photo (required)</span><input type="file" accept="image/*" onChange={e => setClientFile(e.target.files[0])} /></label>}
-      {!eContract && <label className="fld"><span>Contract Photo (required)</span><input type="file" accept="image/*" onChange={e => setContractFile(e.target.files[0])} /></label>}
-      {d.is_trade && <label className="fld"><span>Trade / Lease Return Photo (required)</span><input type="file" accept="image/*" onChange={e => setTradeFile(e.target.files[0])} /></label>}
-      <label className="fld"><span>Additional Photos (optional — pick any from your phone)</span>
-        <input type="file" accept="image/*" multiple onChange={e => setExtraFiles([...e.target.files])} /></label>
-      {extraFiles.length > 0 && <div className="meta" style={{ marginTop: -6, marginBottom: 6 }}>{extraFiles.length} photo{extraFiles.length === 1 ? '' : 's'} selected</div>}
+      {!refusedPic && photoRow('Client Photo (required)', clientUrl, f => pick(f, 'client', setClientUrl))}
+      {!eContract && photoRow('Contract Photo (required)', contractUrl, f => pick(f, 'contract', setContractUrl))}
+      {d.is_trade && photoRow('Trade / Lease Return Photo (required)', tradeUrl, f => pick(f, 'trade', setTradeUrl))}
+      <label className="fld"><span>Additional Photos (optional - pick any from your phone){extraUrls.length ? ` - ${extraUrls.length} uploaded` : ''}</span>
+        <input type="file" accept="image/*" multiple onChange={e => pickExtra([...e.target.files])} /></label>
       <label className="fld"><span>Notes (optional)</span><textarea value={notes} onChange={e => setNotes(e.target.value)} /></label>
-      <button className="btn green xl" onClick={submit} disabled={busy}>{busy ? 'Saving…' : 'Confirm Delivered'}</button>
+      <button className="btn green xl" onClick={submit} disabled={busy || uploading > 0}>
+        {uploading > 0 ? 'Uploading photos...' : busy ? 'Saving...' : 'Confirm Delivered'}
+      </button>
       <div style={{ marginTop: 12, padding: 10, borderRadius: 8, background: 'rgba(201,162,39,.12)', border: '1px solid #5a4a17', color: '#e8d9a8', fontSize: 13, textAlign: 'center', fontWeight: 700 }}>
-        ⚠ MUST COMPLETE IN FULL TO HAVE THIS DELIVERY ADDED TO THE TIMESHEET
+        MUST COMPLETE IN FULL TO HAVE THIS DELIVERY ADDED TO THE TIMESHEET
       </div>
+      <div className="meta" style={{ textAlign: 'center', marginTop: 8 }}>Your progress saves automatically - if you get a call or leave the app, reopen this delivery and it'll still be here.</div>
     </Modal>
   )
 }
