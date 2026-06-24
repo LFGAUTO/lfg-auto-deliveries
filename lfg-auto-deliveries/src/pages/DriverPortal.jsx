@@ -196,14 +196,19 @@ function DeliverModal({ d, onClose, onDone }) {
   const [tasks, setTasks] = useState(saved.tasks || { bt: false, box: false, app: false, review: false })
   const [eContract, setEContract] = useState(saved.eContract || false)
   const [refusedPic, setRefusedPic] = useState(saved.refusedPic || false)
+  // each photo keeps a File (just-picked) AND a url (once uploaded). Either counts as "have it".
+  const [clientFile, setClientFile] = useState(null)
   const [clientUrl, setClientUrl] = useState(saved.clientUrl || null)
+  const [contractFile, setContractFile] = useState(null)
   const [contractUrl, setContractUrl] = useState(saved.contractUrl || null)
+  const [tradeFile, setTradeFile] = useState(null)
   const [tradeUrl, setTradeUrl] = useState(saved.tradeUrl || null)
+  const [extraFiles, setExtraFiles] = useState([])
   const [extraUrls, setExtraUrls] = useState(saved.extraUrls || [])
   const [uploading, setUploading] = useState(0)
   const [busy, setBusy] = useState(false)
 
-  // Auto-save progress to the phone so a call / lock screen / app switch can't wipe it.
+  // Auto-save the parts we safely can (urls + fields) so a reload doesn't wipe progress.
   useEffect(() => {
     const draft = { sig, ok, notes, tasks, eContract, refusedPic, clientUrl, contractUrl, tradeUrl, extraUrls }
     try { localStorage.setItem(KEY, JSON.stringify(draft)) } catch {}
@@ -211,52 +216,71 @@ function DeliverModal({ d, onClose, onDone }) {
 
   const tog = (k) => () => setTasks(p => ({ ...p, [k]: !p[k] }))
 
-  // Photos upload the moment they're picked, so they're saved even if the app reloads.
-  async function pick(file, folder, setter) {
+  // Pick = remember the file right away (so it counts), then upload in the background.
+  function pick(file, folder, setFile, setUrl) {
     if (!file) return
+    setFile(file)
     setUploading(n => n + 1)
-    const url = await uploadPhoto(file, folder)
-    setUploading(n => n - 1)
-    if (url) setter(url); else toast('Photo upload failed - try again')
+    uploadPhoto(file, folder).then(url => { setUploading(n => n - 1); if (url) setUrl(url) })
+      .catch(() => setUploading(n => n - 1))
   }
-  async function pickExtra(files) {
+  function pickExtra(files) {
     if (!files.length) return
+    setExtraFiles(prev => [...prev, ...files])
     setUploading(n => n + 1)
-    const urls = []
-    for (const f of files) { const u = await uploadPhoto(f, 'extra'); if (u) urls.push(u) }
-    setUploading(n => n - 1)
-    setExtraUrls(prev => [...prev, ...urls])
+    ;(async () => {
+      const urls = []
+      for (const f of files) { try { const u = await uploadPhoto(f, 'extra'); if (u) urls.push(u) } catch {} }
+      setUploading(n => n - 1)
+      setExtraUrls(prev => [...prev, ...urls])
+    })()
+  }
+
+  // Make sure we end up with a real url: use the uploaded one, else upload the file now.
+  async function ensure(url, file, folder) {
+    if (url) return url
+    if (file) { try { return await uploadPhoto(file, folder) } catch { return null } }
+    return null
   }
 
   async function submit() {
-    if (uploading > 0) { toast('Photos still uploading - one moment'); return }
     if (!sig) { toast('Driver signature required'); return }
     if (!ok) { toast('Confirm acceptable condition'); return }
-    if (!clientUrl && !refusedPic) { toast('Client photo required (or mark Customer refused photo)'); return }
-    if (!contractUrl && !eContract) { toast('Contract photo required (or mark E-Contract)'); return }
-    if (d.is_trade && !tradeUrl) { toast('Trade / lease return photo required'); return }
+    if (!clientFile && !clientUrl && !refusedPic) { toast('Client photo required (or mark Customer refused photo)'); return }
+    if (!contractFile && !contractUrl && !eContract) { toast('Contract photo required (or mark E-Contract)'); return }
+    if (d.is_trade && !tradeFile && !tradeUrl) { toast('Trade / lease return photo required'); return }
     setBusy(true)
+    const client_photo_url = refusedPic ? null : await ensure(clientUrl, clientFile, 'client')
+    const contract_photo_url = eContract ? null : await ensure(contractUrl, contractFile, 'contract')
+    const trade_photo_url = d.is_trade ? await ensure(tradeUrl, tradeFile, 'trade') : null
+    // extras: keep any already uploaded, plus upload any files not yet uploaded
+    const already = extraUrls.length
+    const extra_photos = [...extraUrls]
+    for (let i = already; i < extraFiles.length; i++) { const u = await ensure(null, extraFiles[i], 'extra'); if (u) extra_photos.push(u) }
+    if (!client_photo_url && !refusedPic) { setBusy(false); toast('Client photo did not upload - retry'); return }
+    if (!contract_photo_url && !eContract) { setBusy(false); toast('Contract photo did not upload - retry'); return }
+    if (d.is_trade && !trade_photo_url) { setBusy(false); toast('Trade photo did not upload - retry'); return }
     await onDone({
       driver_signature: sig, delivered_condition_ok: true,
       driver_notes: notes || null,
-      client_photo_url: refusedPic ? null : clientUrl,
-      contract_photo_url: eContract ? null : contractUrl,
-      trade_photo_url: d.is_trade ? tradeUrl : null,
-      extra_photos: extraUrls,
+      client_photo_url, contract_photo_url, trade_photo_url,
+      extra_photos,
       task_bluetooth: tasks.bt, task_lfg_box: tasks.box, task_app: tasks.app, task_review: tasks.review,
-      task_photo_client: !!clientUrl, task_photo_contract: !!contractUrl,
+      task_photo_client: !!client_photo_url, task_photo_contract: !!contract_photo_url,
       e_contract: eContract, client_photo_refused: refusedPic,
     })
     try { localStorage.removeItem(KEY) } catch {}
     setBusy(false)
   }
 
-  const photoRow = (label, url, onFile) => (
-    <label className="fld"><span>{label}{url ? ' - uploaded' : ''}</span>
+  const photoRow = (label, file, url, onFile) => (
+    <label className="fld"><span>{label}{url ? ' - uploaded' : file ? ' - selected' : ''}</span>
       <input type="file" accept="image/*" onChange={e => onFile(e.target.files[0])} />
       {url && <a href={url} target="_blank" rel="noreferrer" className="meta" style={{ color: '#9bd' }}>view photo</a>}
     </label>
   )
+
+  const extraCount = Math.max(extraFiles.length, extraUrls.length)
 
   return (
     <Modal title="Complete Delivery" onClose={onClose}>
@@ -276,14 +300,14 @@ function DeliverModal({ d, onClose, onDone }) {
       <label className="check"><input type="checkbox" checked={eContract} onChange={e => setEContract(e.target.checked)} /> E-Contract (no paper contract to photo)</label>
       <label className="check"><input type="checkbox" checked={refusedPic} onChange={e => setRefusedPic(e.target.checked)} /> Customer refused photo</label>
       <div style={{ height: 10 }} />
-      {!refusedPic && photoRow('Client Photo (required)', clientUrl, f => pick(f, 'client', setClientUrl))}
-      {!eContract && photoRow('Contract Photo (required)', contractUrl, f => pick(f, 'contract', setContractUrl))}
-      {d.is_trade && photoRow('Trade / Lease Return Photo (required)', tradeUrl, f => pick(f, 'trade', setTradeUrl))}
-      <label className="fld"><span>Additional Photos (optional - pick any from your phone){extraUrls.length ? ` - ${extraUrls.length} uploaded` : ''}</span>
+      {!refusedPic && photoRow('Client Photo (required)', clientFile, clientUrl, f => pick(f, 'client', setClientFile, setClientUrl))}
+      {!eContract && photoRow('Contract Photo (required)', contractFile, contractUrl, f => pick(f, 'contract', setContractFile, setContractUrl))}
+      {d.is_trade && photoRow('Trade / Lease Return Photo (required)', tradeFile, tradeUrl, f => pick(f, 'trade', setTradeFile, setTradeUrl))}
+      <label className="fld"><span>Additional Photos (optional - pick any from your phone){extraCount ? ` - ${extraCount} added` : ''}</span>
         <input type="file" accept="image/*" multiple onChange={e => pickExtra([...e.target.files])} /></label>
       <label className="fld"><span>Notes (optional)</span><textarea value={notes} onChange={e => setNotes(e.target.value)} /></label>
-      <button className="btn green xl" onClick={submit} disabled={busy || uploading > 0}>
-        {uploading > 0 ? 'Uploading photos...' : busy ? 'Saving...' : 'Confirm Delivered'}
+      <button className="btn green xl" onClick={submit} disabled={busy}>
+        {busy ? 'Saving...' : uploading > 0 ? 'Confirm Delivered (photos finishing...)' : 'Confirm Delivered'}
       </button>
       <div style={{ marginTop: 12, padding: 10, borderRadius: 8, background: 'rgba(201,162,39,.12)', border: '1px solid #5a4a17', color: '#e8d9a8', fontSize: 13, textAlign: 'center', fontWeight: 700 }}>
         MUST COMPLETE IN FULL TO HAVE THIS DELIVERY ADDED TO THE TIMESHEET
@@ -292,7 +316,6 @@ function DeliverModal({ d, onClose, onDone }) {
     </Modal>
   )
 }
-
 function IssueModal({ d, onClose, onDone }) {
   const toast = useToast()
   const [type, setType] = useState(ISSUE_TYPES[0])
