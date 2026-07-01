@@ -125,6 +125,7 @@ export default function DriverPortal() {
                 <div>
                   <div className="cn">{d.customer_name}</div>
                   <div className="meta">{vehicleLabel(d)}</div>
+                  <div className="meta gold">🎨 Color: {d.color || '—'}</div>
                   <div className="meta gold">🔑 VIN: {d.vin || '—'}</div>
                   {(d.driver1_name || d.driver2_name) && <div className="meta">🧑‍✈️ {[d.driver1_name, d.driver2_name].filter(Boolean).join(' & ')}</div>}
                   <div className="meta">📍 {d.delivery_address || '—'}</div>
