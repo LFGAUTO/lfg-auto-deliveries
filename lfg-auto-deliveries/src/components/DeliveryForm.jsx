@@ -8,6 +8,7 @@ const EMPTY = {
   status: 'assigned',
   customer_name: '', customer_phone: '', delivery_address: '',
   delivery_date: '', delivery_time: '', driver1_name: '', driver2_name: '',
+  dealer_by_time: '', cust_window_start: '', cust_window_end: '', cust_window_text: '',
   dealership_name: '', dealership_contact: '', dealership_phone: '',
   vin: '', vyear: '', make: '', model: '', color: '',
   monthly_payment: '', miles_per_year: '', contract_type: '',
@@ -68,6 +69,10 @@ export default function DeliveryForm({ existing, drivers, onClose, onSaved }) {
       delivery_address: clean(f.delivery_address),
       delivery_date: clean(f.delivery_date),
       delivery_time: clean(f.delivery_time),
+      dealer_by_time: clean(f.dealer_by_time),
+      cust_window_start: clean(f.cust_window_start),
+      cust_window_end: clean(f.cust_window_end),
+      cust_window_text: clean(f.cust_window_text),
       driver1_name: f.driver1_name.trim() || null,
       driver2_name: f.driver2_name.trim() || null,
       dealership_name: clean(f.dealership_name),
@@ -168,8 +173,15 @@ export default function DeliveryForm({ existing, drivers, onClose, onSaved }) {
       {field('delivery_address', 'Delivery Address')}
       <div className="fg2">
         {field('delivery_date', 'Delivery Date', 'date')}
-        {field('delivery_time', 'Delivery Time', 'time')}
+        {field('dealer_by_time', 'Be At Dealer By', 'time')}
       </div>
+
+      {section('Customer Delivery Window')}
+      <div className="fg2">
+        {field('cust_window_start', 'Window Start', 'time')}
+        {field('cust_window_end', 'Window End', 'time')}
+      </div>
+      {field('cust_window_text', 'Or type it (if no exact window)', 'text', { placeholder: 'e.g. early afternoon' })}
 
       {section('New Vehicle')}
       <div className="fg2">
