@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 import { useToast } from '../components/Toast'
-import { ISSUE_TYPES, vehicleLabel, fmtTime, printDeliveryPacket } from '../lib/helpers'
+import { ISSUE_TYPES, vehicleLabel, fmtTime, fmtClock, custWindow, printDeliveryPacket } from '../lib/helpers'
 import StatusPill from '../components/StatusPill'
 import Modal from '../components/Modal'
 import SignaturePad from '../components/SignaturePad'
@@ -159,14 +159,28 @@ export default function DriverPortal() {
           {shown.map(d => (
             <div key={d.id} className="card">
               <div className="dcard">
-                <div>
+                <div style={{ width: '100%' }}>
                   <div className="cn">{d.customer_name}</div>
-                  <div className="meta">{vehicleLabel(d)}</div>
-                  <div className="meta gold">🎨 Color: {d.color || '—'}</div>
+                  <div className="meta">{vehicleLabel(d)}{d.color ? ` · ${d.color}` : ''}</div>
+
+                  {d.dealer_by_time && (
+                    <div style={{ background: '#1b130a', border: '1px solid #5a4a17', borderRadius: 12, padding: '12px 14px', margin: '12px 0' }}>
+                      <div style={{ color: '#c9a227', fontSize: 11, fontWeight: 800, letterSpacing: 1.5 }}>BE AT DEALER BY</div>
+                      <div style={{ color: '#f5c644', fontSize: 34, fontWeight: 800, lineHeight: 1.1 }}>{fmtClock(d.dealer_by_time)}</div>
+                      {d.dealership_name && <div style={{ color: '#b89a4a', fontSize: 13 }}>{d.dealership_name}</div>}
+                    </div>
+                  )}
+                  {custWindow(d) && (
+                    <div style={{ background: '#0c1520', border: '1px solid #1d4a73', borderRadius: 12, padding: '10px 14px', margin: '10px 0' }}>
+                      <div style={{ color: '#5a9bd4', fontSize: 11, fontWeight: 800, letterSpacing: 1.5 }}>CUSTOMER EXPECTS DELIVERY</div>
+                      <div style={{ color: '#9fd0ff', fontSize: 22, fontWeight: 800, lineHeight: 1.1 }}>{custWindow(d)}</div>
+                    </div>
+                  )}
+
                   <div className="meta gold">🔑 VIN: {d.vin || '—'}</div>
                   {(d.driver1_name || d.driver2_name) && <div className="meta">🧑‍✈️ {[d.driver1_name, d.driver2_name].filter(Boolean).join(' & ')}</div>}
                   <div className="meta">📍 {d.delivery_address || '—'}</div>
-                  <div className="meta">🗓 {d.delivery_date || '—'} · 🕒 {d.delivery_time || '—'}</div>
+                  <div className="meta">🗓 {d.delivery_date || '—'}</div>
                   <div className="meta">📞 {d.customer_phone || '—'}</div>
                   {d.dealership_name && <div className="meta">🏢 {d.dealership_name} {d.dealership_phone ? `· ${d.dealership_phone}` : ''}</div>}
                   {d.cod_required && <div className="meta gold">💵 COD {d.cod_amount} ({d.cod_type}) to {d.cod_made_out_to}</div>}
