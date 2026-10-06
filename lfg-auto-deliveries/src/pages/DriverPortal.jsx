@@ -148,6 +148,7 @@ export default function DriverPortal() {
 
         {(() => {
           const shown = rows.filter(d => {
+            if (!d.is_ready) return false   // drivers only see deliveries Jessica marked ready
             if (pick === 'all') return true
             if (pick === '__un__') return !d.driver1_name && !d.driver2_name
             return d.driver1_name === pick || d.driver2_name === pick
