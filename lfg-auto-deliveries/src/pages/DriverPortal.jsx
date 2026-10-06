@@ -7,6 +7,8 @@ import StatusPill from '../components/StatusPill'
 import Modal from '../components/Modal'
 import SignaturePad from '../components/SignaturePad'
 import Closeout from '../components/Closeout'
+import { PhoneAlerts, DriverAcknowledgment } from '../components/PushAlerts'
+import { phoneRequest } from '../lib/push'
 import useRefresh from '../hooks/useRefresh'
 import { DISPATCH_PHONE, dayLabel, directions, driverNames, nextAction, tradeDestination, dateGroup } from '../lib/workflow'
 
@@ -23,6 +25,13 @@ export default function DriverPortal() {
   const { profile, userName, signOut } = useAuth()
   const toast = useToast()
   const [rows, setRows] = useState([])
+  const [alertPhone, setAlertPhone] = useState(null)
+  const [pushJobs, setPushJobs] = useState([])
+  async function loadPushJobs() { if (alertPhone) { try { const result = await phoneRequest('jobs'); setPushJobs(result.jobs) } catch { /* Normal deliveries remain usable when alerts cannot refresh. */ } } }
+  useRefresh(loadPushJobs)
+  useEffect(() => { loadPushJobs() }, [alertPhone])
+  const linkedDelivery = new URLSearchParams(window.location.search).get('delivery')
+  useEffect(() => { if (linkedDelivery && rows.length) document.getElementById('delivery-' + linkedDelivery)?.scrollIntoView({ block: 'center' }) }, [linkedDelivery, rows.length])
   const [drivers, setDrivers] = useState([])
   const [pick, setPick] = useState(() => localStorage.getItem('lfg-driver-name') || 'all')
   const [loading, setLoading] = useState(true)
@@ -103,16 +112,18 @@ export default function DriverPortal() {
       <div className="content">
         <div className="page-heading"><div><div className="eyebrow">LFG driver operations</div><h1 className="h1">{actor ? `Your day, ${actor}.` : 'Your delivery day.'}</h1><p className="sub">Choose your name to record updates. Use controls only while parked.</p></div><a className="btn ghost sm" href={`tel:${DISPATCH_PHONE}`}>Contact dispatch · Jess</a></div>
         <label className="fld driver-picker"><span>Driver</span><select value={pick} onChange={e => setPick(e.target.value)}><option value="all">All drivers · view only</option>{drivers.map(dr => <option key={dr.id} value={dr.name}>{dr.name}</option>)}<option value="__un__">Unassigned · view only</option></select></label>
+        <PhoneAlerts drivers={drivers} onPhone={name => { setAlertPhone(name); if (linkedDelivery) setPick(name) }} />
         {payInfo && <div className="earnings-bar"><div><strong>${payInfo.total.toFixed(2)} this week</strong><p className="meta">{payInfo.count} deliveries · {payInfo.label}</p></div><span>{payInfo.paid ? 'Paid' : 'Pending'}</span></div>}
         {loading && <p role="status">Loading deliveries…</p>}
         {loadError && <div className="error-banner" role="alert">{loadError}<button className="btn ghost sm" onClick={load}>Retry</button></div>}
         {(() => {
-          const shown = rows.filter(d => (d.is_ready || d.closeout_required) && (pick === 'all' || (pick === '__un__' ? !driverNames(d).length : driverNames(d).includes(pick))))
+          const shown = rows.filter(d => (d.is_ready || d.closeout_required) && (d.id === linkedDelivery || pick === 'all' || (pick === '__un__' ? !driverNames(d).length : driverNames(d).includes(pick))))
           return <>{!loading && !loadError && !shown.length && <div className="empty-state">You’re all caught up. New live deliveries appear here automatically.</div>}
           {['Overdue', 'Today', 'Upcoming', 'Date needed', 'Finish your returns'].map(group => {
             const jobs = shown.filter(d => dateGroup(d) === group)
             if (!jobs.length) return null
-            return <section key={group}><h2 className="section-title">{group} · {jobs.length}</h2><div className="driver-jobs">{jobs.map(d => <article className="card driver-job" key={d.id}>
+            return <section key={group}><h2 className="section-title">{group} · {jobs.length}</h2><div className="driver-jobs">{jobs.map(d => <article id={"delivery-" + d.id} className="card driver-job" key={d.id}>
+              <DriverAcknowledgment job={pushJobs.find(j => j.delivery_id === d.id && j.revision === d.push_revision)} phone={alertPhone} onSaved={loadPushJobs} />
               <div className="dcard"><div><div className="eyebrow">{dayLabel(d.delivery_date)}</div><h2 className="cn">{d.customer_name}</h2><p className="meta">{vehicleLabel(d)}{d.color ? ` · ${d.color}` : ''}</p></div><StatusPill status={d.status} /></div>
               {!d.delivered_at && <><div className="timing-grid"><div><span>Be at dealer by</span><strong>{fmtClock(d.dealer_by_time) || 'Time needed'}</strong><p>{d.dealership_name || 'Dealer needed'}</p></div><div><span>Customer window</span><strong>{custWindow(d) || 'Confirm with Jess'}</strong></div></div>
               <div className="trip-list"><div><span>01</span><div><strong>{d.dealership_name || 'Pickup'}</strong><p>{d.dealership_address || 'Pickup address not provided'}</p></div></div><div><span>02</span><div><strong>Customer handoff</strong><p>{d.delivery_address || 'Address needed'}</p></div></div>{d.is_trade && <div><span>03</span><div><strong>Trade / lease return</strong><p>{tradeDestination(d)}</p><p>{d.trade_notes}</p></div></div>}{d.return_plan && <div><span>→</span><div><strong>After this run</strong><p>{d.return_plan}</p></div></div>}</div>

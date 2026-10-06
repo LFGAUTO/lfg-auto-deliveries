@@ -43,7 +43,7 @@ export default function App() {
         </Route>
       )}
 
-      {isDriver && <Route path="/driver" element={<DriverPortal />} />}
+      {(isDriver || isAdmin) && <Route path="/driver" element={<DriverPortal />} />}
 
       <Route path="*" element={<Navigate to={isAdmin ? '/' : '/driver'} replace />} />
     </Routes>

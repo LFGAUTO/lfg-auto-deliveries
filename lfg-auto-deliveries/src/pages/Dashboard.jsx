@@ -8,6 +8,7 @@ import { easternDay, driverNames, dayLabel, nextAction, outstanding, tradeDestin
 import useRefresh from '../hooks/useRefresh'
 import StatusPill from '../components/StatusPill'
 import Closeout from '../components/Closeout'
+import { DispatchAlerts } from '../components/PushAlerts'
 
 export default function Dashboard() {
   const { profile, userName } = useAuth()
@@ -57,6 +58,7 @@ export default function Dashboard() {
     {loading ? <p role="status">Loading operations…</p> : <>
       <div className="kpis ops-kpis">{[['Scheduled today', todayJobs.length], ['Delivered today', deliveredToday.length], ['Awaiting closeout', pending.length], ['Open issues', issues.length]].map(([k,n]) => <div className="kpi" key={k}><div className="n">{n}</div><div className="k">{k}</div></div>)}</div>
       {!!issues.length && <section><h2 className="section-title">Needs attention</h2><div className="grid">{issues.map(i => <div className="attention-banner" key={i.id}><div><strong>{i.type} · {i.deliveries?.customer_name || 'Delivery'}</strong><p>{i.note}</p><span className="meta">{i.created_by_name} · {fmtDateTime(i.created_at)}</span></div><button className="btn ghost sm" onClick={() => resolve(i)}>Resolve</button></div>)}</div></section>}
+      <DispatchAlerts />
       <h2 className="section-title">Today’s driver runs</h2>
       {!runs.length && <div className="empty-state">No active runs for today.</div>}
       <div className="dispatch-lanes">{names.map(name => <section className="dispatch-lane" key={name}><h2>{name}</h2>{runs.filter(d => name === 'Unassigned' ? !driverNames(d).length : driverNames(d).includes(name)).map(d => <button key={d.id} className={'dispatch-job' + (selected === d.id ? ' selected' : '')} onClick={() => setSelected(d.id)}><div className="row spread"><span className="eyebrow">{fmtClock(d.dealer_by_time) || 'Time needed'} · {dayLabel(d.delivery_date)}</span><StatusPill status={d.status} /></div><strong>{d.customer_name}</strong><p>{vehicleLabel(d)}</p><div className="route-caption">{d.dealership_name || 'Dealer needed'} → Customer{d.is_trade ? ` → ${tradeDestination(d)}` : ''}</div><p className="meta">Customer: {custWindow(d) || 'Window needed'}</p><span className="meta">{d.is_ready ? 'Live' : 'Draft'}{driverNames(d).length > 1 ? ' · Two-driver job' : ''}{d.cod_required && !d.cod_received ? ' · COD required' : ''}</span></button>)}</section>)}</div>

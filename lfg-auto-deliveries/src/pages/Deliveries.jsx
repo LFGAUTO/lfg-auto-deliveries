@@ -7,6 +7,8 @@ import StatusPill from '../components/StatusPill'
 import DeliveryForm from '../components/DeliveryForm'
 import useRefresh from '../hooks/useRefresh'
 import { dayLabel } from '../lib/workflow'
+import { pushRequest } from '../lib/push'
+import { DispatchAlerts } from '../components/PushAlerts'
 
 export default function Deliveries() {
   const { profile, userName } = useAuth()
@@ -44,13 +46,14 @@ export default function Deliveries() {
   async function notifyDriver(d) {
     if (d.is_ready) return
     if (!d.driver1_name && !d.driver2_name) { toast('Assign a driver before making this delivery live'); return }
-    if (!confirm(`Make ${d.customer_name}'s delivery visible to drivers? Push and text alerts are not enabled yet.`)) return
+    if (!confirm(`Make ${d.customer_name}'s delivery visible to drivers? Assigned drivers with alerts enabled will receive a push notification.`)) return
     setPublishing(d.id)
     const { error } = await supabase.from('deliveries').update({ is_ready: true, published_at: new Date().toISOString() }).eq('id', d.id)
     setPublishing(null)
     if (error) { toast('Could not publish delivery'); return }
     await supabase.from('activity_log').insert({ delivery_id: d.id, user_id: profile.id, user_name: userName, action: `made ${d.customer_name}'s delivery live` })
-    toast('Delivery is live in the driver app. No notification sent.'); load()
+    toast('Delivery is live. Assigned-driver alerts are queued.'); load()
+    try { await pushRequest('drain') } catch { toast('Delivery saved. Alerts will retry automatically.') }
   }
 
   const driverName = (d) => [d.driver1_name, d.driver2_name].filter(Boolean).join(' & ') || 'Unassigned'
@@ -103,6 +106,7 @@ export default function Deliveries() {
       <button className="btn gold" onClick={openNew}>+ Create a Delivery</button>
       <div style={{ height: 14 }} />
 
+      <DispatchAlerts />
       <div className="grid">
         {loading && <p role="status">Loading deliveries…</p>}
         {loadError && <p className="error-banner" role="alert">{loadError}</p>}

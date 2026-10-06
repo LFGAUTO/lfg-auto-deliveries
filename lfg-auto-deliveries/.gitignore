@@ -5,3 +5,5 @@ dist/
 !.env.example
 *.local
 .ui-test-*/
+
+supabase/.temp/

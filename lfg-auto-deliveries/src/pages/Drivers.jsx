@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { useToast } from '../components/Toast'
 import Modal from '../components/Modal'
+import { PhoneAlerts } from '../components/PushAlerts'
 
 // Drivers share ONE login. This page just manages the list of NAMES used
 // when assigning deliveries. The signature captured at delivery shows who did it.
@@ -56,6 +57,7 @@ export default function Drivers() {
         <button className="btn ghost sm" style={{ marginTop: 10 }} onClick={resetDriverPw}>Reset Driver Password</button>
       </div>
 
+      <PhoneAlerts drivers={roster} onPhone={() => {}} />
       <button className="btn gold" onClick={() => setShowNew(true)}>+ Add Driver to Roster</button>
       <div style={{ height: 14 }} />
 

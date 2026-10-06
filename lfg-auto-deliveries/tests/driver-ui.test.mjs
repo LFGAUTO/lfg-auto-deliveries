@@ -24,7 +24,7 @@ test('driver handoff preserves its draft on failure and dispatch calls Jess', as
   const dir = await mkdtemp(path.resolve('.ui-test-'))
   const bundle = await build({ entryPoints: ['src/pages/DriverPortal.jsx'], bundle:true, write:false, format:'esm', platform:'node', packages:'external', jsx:'automatic', plugins:[{name:'offline-fixtures',setup(b){
     b.onResolve({filter:/^react(?:\/|$)/}, a=>({path:a.path,external:true}))
-    b.onResolve({filter:/lib\/supabase$/},()=>({path:'db',namespace:'mock'}))
+    b.onResolve({filter:/\/supabase$/},()=>({path:'db',namespace:'mock'}))
     b.onResolve({filter:/context\/AuthContext$/},()=>({path:'auth',namespace:'mock'}))
     b.onResolve({filter:/components\/Toast$/},()=>({path:'toast',namespace:'mock'}))
     b.onResolve({filter:/components\/SignaturePad$/},()=>({path:'signature',namespace:'mock'}))

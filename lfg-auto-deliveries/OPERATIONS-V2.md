@@ -1,6 +1,6 @@
 # Delivery operations refresh
 
-This version updates dispatch, driver handoff, return tracking, and the office TV board. Push notifications and SMS are intentionally deferred.
+This version updates dispatch, driver handoff, return tracking, and the office TV board. Driver push notifications are now available; see PUSH-NOTIFICATIONS.md. SMS remains deferred.
 
 ## Before deployment
 
@@ -14,7 +14,7 @@ Do not rerun `supabase/setup.sql` as a replacement for the new migration. The li
 
 ## Behavior
 
-- Jess publishes a draft with **Make delivery live**. This exposes the job in the driver app; it does not send a notification or claim one was sent.
+- Jess publishes a draft with **Make delivery live**. This exposes the job in the driver app and queues alerts for assigned drivers with enrolled phones.
 - Drivers select their name, which is remembered on their device. All / Unassigned views are read-only in the interface. The existing shared account remains; selected names are self-reported attribution, not independently authenticated identities.
 - Actions follow Assigned → At dealer → En route → Customer handoff. Admin status corrections require a reason.
 - The customer handoff retains existing signature, condition, photo, and photo-exception requirements. COD must be collected or have a written exception. An exception remains outstanding for dispatch; it is not treated as money collected.
