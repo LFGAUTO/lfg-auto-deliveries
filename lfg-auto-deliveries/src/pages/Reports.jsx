@@ -17,8 +17,17 @@ function monthBounds(offset = 0) {
   const end = new Date(n.getFullYear(), n.getMonth() + offset + 1, 0); end.setHours(23, 59, 59, 999)
   return [start, end]
 }
+// pay week runs Saturday -> Friday, paid that Friday. offset in weeks.
+function payWeekBounds(offset = 0) {
+  const n = new Date(); n.setDate(n.getDate() + offset * 7)
+  const back = (n.getDay() + 1) % 7            // days since the most recent Saturday
+  const start = new Date(n); start.setDate(n.getDate() - back); start.setHours(0, 0, 0, 0)
+  const end = new Date(start); end.setDate(start.getDate() + 6); end.setHours(23, 59, 59, 999)
+  return [start, end]
+}
 const inDay = (iso, start, end) =>
   iso && iso >= start.toISOString().slice(0, 10) && iso <= end.toISOString().slice(0, 10)
+const money = (n) => '$' + Number(n || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 
 export default function Reports() {
   const { profile, userName } = useAuth()
@@ -28,6 +37,8 @@ export default function Reports() {
   const [issues, setIssues] = useState([])
   const [weekOff, setWeekOff] = useState(0)
   const [monthOff, setMonthOff] = useState(0)
+  const [payOff, setPayOff] = useState(0)
+  const [paid, setPaid] = useState([])
 
   async function load() {
     const { data } = await supabase.from('deliveries').select('*')
@@ -35,6 +46,8 @@ export default function Reports() {
     const { data: iss } = await supabase.from('issues')
       .select('*, deliveries(customer_name)').order('created_at', { ascending: false })
     setIssues(iss || [])
+    const { data: pd } = await supabase.from('payroll_paid').select('*')
+    setPaid(pd || [])
   }
   useEffect(() => { load() }, [])
 
@@ -88,6 +101,68 @@ export default function Reports() {
   const mNames = Object.keys(monthByDriver).sort()
   const sCount = (s) => monthDeliv.filter(d => d.status === s).length
 
+  // ----- PAYROLL (Sat–Fri, pay per driver) -----
+  const [pStart, pEnd] = payWeekBounds(payOff)
+  const pStartISO = pStart.toISOString().slice(0, 10)
+  const payLabel = `${pStart.toLocaleDateString()} – ${pEnd.toLocaleDateString()}`
+  const payDone = all.filter(d => d.delivered_at && !d.pay_exclude && inDay(d.delivered_at.slice(0, 10), pStart, pEnd))
+  const payTally = {}
+  payDone.forEach(d => [d.driver1_name, d.driver2_name].filter(Boolean).forEach(name => {
+    const line = { d, base: Number(d.pay_amount ?? 100), adj: Number(d.pay_adjust || 0) }
+    ;(payTally[name] = payTally[name] || []).push(line)
+  }))
+  const payNames = Object.keys(payTally).sort()
+  const driverTotal = (name) => (payTally[name] || []).reduce((s, l) => s + l.base + l.adj, 0)
+  const grandTotal = payNames.reduce((s, n) => s + driverTotal(n), 0)
+  const isPaid = (name) => paid.find(p => p.driver_name === name && p.week_start === pStartISO)
+
+  async function markPaid(name) {
+    const total = driverTotal(name)
+    if (!confirm(`Mark ${name} PAID for ${payLabel}?\nTotal: ${money(total)} (${(payTally[name] || []).length} deliveries)`)) return
+    const { error } = await supabase.from('payroll_paid').upsert({
+      driver_name: name, week_start: pStartISO, amount: total,
+      deliveries: (payTally[name] || []).length, paid_by: userName, paid_at: new Date().toISOString(),
+    }, { onConflict: 'driver_name,week_start' })
+    if (error) { toast("Couldn't mark paid — try again"); return }
+    toast(`${name} marked paid`); load()
+  }
+  async function unmarkPaid(name) {
+    if (!confirm(`Undo PAID for ${name} (${payLabel})?`)) return
+    await supabase.from('payroll_paid').delete().eq('driver_name', name).eq('week_start', pStartISO)
+    toast('Paid status removed'); load()
+  }
+  function exportPay() {
+    const rows = []
+    payNames.forEach(name => payTally[name].forEach(l => rows.push({
+      Driver: name, Paid: isPaid(name) ? 'YES' : 'NO', Customer: l.d.customer_name,
+      Vehicle: vehicleLabel(l.d), Delivered: l.d.delivered_at ? new Date(l.d.delivered_at).toLocaleString() : '',
+      Value: l.base.toFixed(2), Adjust: l.adj.toFixed(2),
+      LineTotal: (l.base + l.adj).toFixed(2), AdjustNote: l.d.pay_adjust_note || '',
+    })))
+    if (!rows.length) { toast('No payable deliveries this week'); return }
+    downloadCSV(rows, `lfg-payroll-${pStartISO}.csv`)
+  }
+  function printPay() {
+    const esc = s => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;')
+    const body = payNames.map(name => `
+      <h3>${esc(name)} — ${money(driverTotal(name))} ${isPaid(name) ? '(PAID)' : ''}</h3>
+      <table><tr><th>Customer</th><th>Vehicle</th><th>Delivered</th><th>Value</th><th>+/-</th><th>Total</th></tr>
+      ${payTally[name].map(l => `<tr><td>${esc(l.d.customer_name)}</td><td>${esc(vehicleLabel(l.d))}</td>
+        <td>${l.d.delivered_at ? new Date(l.d.delivered_at).toLocaleString() : ''}</td>
+        <td>${money(l.base)}</td><td>${l.adj ? money(l.adj) : '-'}</td><td>${money(l.base + l.adj)}</td></tr>`).join('')}
+      </table>`).join('')
+    const html = `<!doctype html><meta charset=utf-8><title>Payroll ${payLabel}</title>
+      <style>body{font-family:Arial;padding:28px;color:#111}h1{border-bottom:3px solid #c9a227;padding-bottom:8px}
+      h3{margin:18px 0 4px}table{width:100%;border-collapse:collapse;font-size:13px;margin-bottom:8px}
+      th,td{border-bottom:1px solid #eee;padding:5px 8px;text-align:left}th{color:#666}
+      .tot{font-size:18px;font-weight:800;margin-top:10px}</style>
+      <h1>LFG AUTO — Driver Payroll</h1><div>Pay week (Sat–Fri): ${payLabel}</div>
+      ${body}<div class="tot">Grand total: ${money(grandTotal)}</div>
+      <script>window.onload=function(){window.print()}</script>`
+    const w = window.open('', '_blank'); if (!w) { toast('Allow pop-ups to print'); return }
+    w.document.write(html); w.document.close()
+  }
+
   const openIssues = issues.filter(i => !i.resolved)
 
   return (
@@ -97,6 +172,7 @@ export default function Reports() {
 
       <div className="row" style={{ gap: 8, margin: '12px 0 18px' }}>
         <button className={'btn sm ' + (tab === 'timesheets' ? 'gold' : 'ghost')} onClick={() => setTab('timesheets')}>🧾 Timesheets</button>
+        <button className={'btn sm ' + (tab === 'payroll' ? 'gold' : 'ghost')} onClick={() => setTab('payroll')}>💵 Payroll</button>
         <button className={'btn sm ' + (tab === 'monthly' ? 'gold' : 'ghost')} onClick={() => setTab('monthly')}>📅 Monthly</button>
         <button className={'btn sm ' + (tab === 'issues' ? 'gold' : 'ghost')} onClick={() => setTab('issues')}>⚠ Issues{openIssues.length ? ` (${openIssues.length})` : ''}</button>
       </div>
@@ -147,6 +223,57 @@ export default function Reports() {
       )}
 
       {/* ---------------- MONTHLY ---------------- */}
+      {/* ---------------- PAYROLL ---------------- */}
+      {tab === 'payroll' && (
+        <>
+          <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
+            <div className="row" style={{ gap: 8, alignItems: 'center' }}>
+              <button className="btn ghost sm" onClick={() => setPayOff(payOff - 1)}>◀ Prev</button>
+              <button className="btn ghost sm" onClick={() => setPayOff(0)}>This Week</button>
+              <button className="btn ghost sm" onClick={() => setPayOff(payOff + 1)}>Next ▶</button>
+            </div>
+            <div className="row" style={{ gap: 8 }}>
+              <button className="btn ghost sm" onClick={exportPay}>⬇ CSV</button>
+              <button className="btn ghost sm" onClick={printPay}>🖨 Print</button>
+            </div>
+          </div>
+          <div className="sub" style={{ marginTop: 6 }}>Pay week (Sat–Fri): {payLabel}</div>
+
+          <div className="kpis" style={{ marginTop: 14 }}>
+            <div className="kpi gold"><div className="n">{money(grandTotal)}</div><div className="k">Total owed this week</div></div>
+            <div className="kpi"><div className="n">{payDone.length}</div><div className="k">Payable deliveries</div></div>
+            <div className="kpi"><div className="n">{payNames.length}</div><div className="k">Drivers</div></div>
+          </div>
+
+          {payNames.length === 0 && <div className="muted" style={{ marginTop: 14 }}>No payable deliveries in this week.</div>}
+
+          <div className="grid" style={{ marginTop: 14 }}>
+            {payNames.map(name => {
+              const p = isPaid(name)
+              return (
+                <div key={name} className="card" style={{ borderColor: p ? '#2f5d3a' : undefined }}>
+                  <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center' }}>
+                    <strong className="gold">{name}</strong>
+                    <span className="pill" style={{ color: p ? '#7bd88f' : '#e8d9a8' }}>{money(driverTotal(name))}{p ? ' · PAID' : ''}</span>
+                  </div>
+                  <hr />
+                  {payTally[name].map((l, idx) => (
+                    <div key={idx} className="meta" style={{ marginTop: 4 }}>
+                      • {l.d.customer_name} — {vehicleLabel(l.d)} · {money(l.base)}{l.adj ? ` ${l.adj > 0 ? '+' : ''}${money(l.adj)} (${l.d.pay_adjust_note || 'adj'})` : ''}
+                    </div>
+                  ))}
+                  <div className="btnrow" style={{ marginTop: 10 }}>
+                    {p
+                      ? <button className="btn ghost sm" onClick={() => unmarkPaid(name)}>Undo Paid</button>
+                      : <button className="btn green sm" onClick={() => markPaid(name)}>✓ Mark Paid ({money(driverTotal(name))})</button>}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </>
+      )}
+
       {tab === 'monthly' && (
         <>
           <div className="row" style={{ gap: 8, alignItems: 'center' }}>
