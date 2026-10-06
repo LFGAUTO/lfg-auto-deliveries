@@ -34,6 +34,21 @@ export default function Deliveries() {
     toast('Delivery deleted'); load()
   }
 
+  async function notifyDriver(d) {
+    const who = [d.driver1_name, d.driver2_name].filter(Boolean).join(' & ') || 'all drivers'
+    const resend = d.is_ready && d.notified_at
+    if (!confirm(`${resend ? 'Re-send' : 'Send'} alert to ${who} and mark this delivery READY?`)) return
+    const { error } = await supabase.from('deliveries')
+      .update({ is_ready: true, notified_at: new Date().toISOString() }).eq('id', d.id)
+    if (error) { toast("Couldn't send — try again"); return }
+    // Phone push/text is wired behind this step next. For now it marks ready + records the time.
+    await supabase.from('activity_log').insert({
+      delivery_id: d.id, user_id: profile.id, user_name: userName,
+      action: `${resend ? 're-sent' : 'sent'} the driver alert for ${d.customer_name}`,
+    })
+    toast(resend ? 'Alert re-sent' : 'Driver notified — delivery is now live'); load()
+  }
+
   const driverName = (d) => [d.driver1_name, d.driver2_name].filter(Boolean).join(' & ') || 'Unassigned'
 
   const ORDER = ['assigned', 'at_dealer', 'en_route', 'delivered']
@@ -85,17 +100,23 @@ export default function Deliveries() {
       <div className="grid">
         {deliveries.length === 0 && <div className="muted">No active deliveries. Create one above.</div>}
         {deliveries.map(d => (
-          <div key={d.id} className="card">
+          <div key={d.id} className="card" style={{ borderColor: d.is_ready ? undefined : '#5a4a17' }}>
             <div className="dcard">
               <div>
                 <div className="cn">{d.customer_name}</div>
                 <div className="meta">{vehicleLabel(d)}</div>
                 <div className="meta">🧑‍✈️ {driverName(d)} · 📅 {d.delivery_date || '—'} {d.delivery_time || ''}</div>
                 {d.dealership_name && <div className="meta">🏢 {d.dealership_name}</div>}
+                {d.is_ready
+                  ? <div className="meta" style={{ color: '#7bd88f' }}>✓ Live · notified {d.notified_at ? new Date(d.notified_at).toLocaleString([], { hour: 'numeric', minute: '2-digit', month: 'numeric', day: 'numeric' }) : ''}</div>
+                  : <div className="meta" style={{ color: '#e8c35a' }}>⏳ Draft — not sent to drivers yet</div>}
               </div>
               <StatusPill status={d.status} />
             </div>
-            <div className="btnrow" style={{ marginTop: 12 }}>
+            <button className={'btn ' + (d.is_ready ? 'ghost' : 'gold') + ' sm'} style={{ width: '100%', marginTop: 12 }} onClick={() => notifyDriver(d)}>
+              {d.is_ready ? '🔄 Re-send Alert' : '📢 Notify Driver (make live)'}
+            </button>
+            <div className="btnrow" style={{ marginTop: 8 }}>
               <button className="btn ghost sm" style={{ width: '100%' }} onClick={() => openEdit(d)}>Edit</button>
               <button className="btn ghost sm" style={{ width: '100%' }} onClick={() => printDeliveryPacket(d)}>🖨 Print / PDF</button>
               <button className="btn danger sm" style={{ width: '100%' }} onClick={() => remove(d)}>Delete</button>
