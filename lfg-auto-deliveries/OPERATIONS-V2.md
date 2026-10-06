@@ -22,8 +22,8 @@ Do not rerun `supabase/setup.sql` as a replacement for the new migration. The li
 - Drivers confirm UPS handover, return to dealer (optional recipient), or handover to Jess / office. No tracking number or receipt upload is required. Office handover transfers the remaining paperwork task to Jess; it does not mark the final return complete.
 - Admin marks genuinely electronic deals **No original paperwork to return** in the delivery form. Selecting the e-contract photo exception does not automatically waive the return of other original documents.
 - The database trigger recomputes closeout from current row values, so independent COD / trade / paperwork updates cannot prematurely close a run. Historic records keep their existing closed state.
-- TV board retains daily, weekly, monthly, map, and fullscreen views. Four large cards per page rotate every 15 seconds. Data refreshes every 30 seconds, with last successful update and stale/error states. Pending closeout is included across date ranges so old unfinished returns stay visible.
-- The driver app and dispatch refresh every 30 seconds and on window focus. GPS still depends on browser permissions and active-page behavior. The display reports sharing errors rather than implying background tracking is guaranteed.
+- TV board retains daily, weekly, monthly, and fullscreen views. Four large cards per page rotate every 15 seconds. Data refreshes every 30 seconds, with last successful update and stale/error states. Pending closeout is included across date ranges so old unfinished returns stay visible.
+- The driver app and dispatch refresh every 30 seconds and on window focus. Live map and in-app GPS sharing were removed; dispatch uses drivers’ iPhone location sharing outside the app when needed.
 - Contact dispatch uses `tel:+17325470333` (Jess). There is no Call Dealer action. Navigation uses full dealer addresses entered by admin.
 
 ## Validation
@@ -33,7 +33,7 @@ Do not rerun `supabase/setup.sql` as a replacement for the new migration. The li
 - In-memory PostgreSQL migration tests: repeat application, untouched historical records, sequential UPS / trade / COD returns, office ownership, reopening when an obligation becomes outstanding, and preserved delivery-based pay.
 - Eastern date boundaries around midnight and daylight saving time.
 
-Actual Supabase permissions, phone photo uploads and GPS, dialer behavior, and TV fullscreen need device/staging checks. No live data was changed during implementation.
+Actual Supabase permissions, phone photo uploads, dialer behavior, and TV fullscreen need device/staging checks. No live data was changed during implementation.
 
 ## Rollback
 

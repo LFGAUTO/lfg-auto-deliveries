@@ -28,7 +28,6 @@ export default function DriverPortal() {
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState('')
   const [busyId, setBusyId] = useState(null)
-  const [locationState, setLocationState] = useState('Not sharing')
   const actor = pick !== 'all' && pick !== '__un__' ? pick : null
   useEffect(() => { localStorage.setItem('lfg-driver-name', pick) }, [pick])
   const [deliverFor, setDeliverFor] = useState(null)
@@ -70,36 +69,6 @@ export default function DriverPortal() {
     })()
   }, [pick, rows])
 
-  // Live location sharing: ON while the selected driver has an EN ROUTE job, OFF otherwise.
-  useEffect(() => {
-    const realName = (pick !== 'all' && pick !== '__un__') ? pick : null
-    const myEnRoute = realName
-      ? rows.find(d => d.status === 'en_route' && (d.driver1_name === realName || d.driver2_name === realName))
-      : null
-
-    if (!realName || !myEnRoute || !navigator.geolocation) {
-      setLocationState('Not sharing')
-      if (realName) supabase.from('live_locations').delete().eq('driver_name', realName)
-      return
-    }
-
-    let stopped = false
-    const send = () => navigator.geolocation.getCurrentPosition(
-      async pos => {
-        if (stopped) return
-        const { error } = await supabase.from('live_locations').upsert({
-          driver_name: realName, lat: pos.coords.latitude, lng: pos.coords.longitude,
-          customer: myEnRoute.customer_name, delivery_id: myEnRoute.id, updated_at: new Date().toISOString(),
-        })
-        if (!stopped) setLocationState(error ? 'Location update failed' : 'Location shared · ' + fmtTime(new Date()))
-      },
-      () => { if (!stopped) setLocationState('Location paused · check permission') }, { enableHighAccuracy: true, maximumAge: 10000, timeout: 15000 }
-    )
-    send()
-    const t = setInterval(send, 25000)
-    return () => { stopped = true; clearInterval(t) }
-  }, [pick, rows])
-
   async function logActivity(deliveryId, action) {
     await supabase.from('activity_log').insert({ delivery_id: deliveryId, user_id: profile.id, user_name: actor || userName, action })
   }
@@ -134,7 +103,6 @@ export default function DriverPortal() {
       <div className="content">
         <div className="page-heading"><div><div className="eyebrow">LFG driver operations</div><h1 className="h1">{actor ? `Your day, ${actor}.` : 'Your delivery day.'}</h1><p className="sub">Choose your name to record updates. Use controls only while parked.</p></div><a className="btn ghost sm" href={`tel:${DISPATCH_PHONE}`}>Contact dispatch · Jess</a></div>
         <label className="fld driver-picker"><span>Driver</span><select value={pick} onChange={e => setPick(e.target.value)}><option value="all">All drivers · view only</option>{drivers.map(dr => <option key={dr.id} value={dr.name}>{dr.name}</option>)}<option value="__un__">Unassigned · view only</option></select></label>
-        {actor && <div className="sub" role="status">{locationState}</div>}
         {payInfo && <div className="earnings-bar"><div><strong>${payInfo.total.toFixed(2)} this week</strong><p className="meta">{payInfo.count} deliveries · {payInfo.label}</p></div><span>{payInfo.paid ? 'Paid' : 'Pending'}</span></div>}
         {loading && <p role="status">Loading deliveries…</p>}
         {loadError && <div className="error-banner" role="alert">{loadError}<button className="btn ghost sm" onClick={load}>Retry</button></div>}
