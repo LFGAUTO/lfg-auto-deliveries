@@ -6,7 +6,7 @@ export default function Layout() {
   const nav = useNavigate()
 
   const tabs = [
-    { to: '/', icon: '📊', label: 'Dashboard', end: true },
+    { to: '/', icon: '📊', label: 'Dispatch', end: true },
     { to: '/deliveries', icon: '🚗', label: 'Deliveries' },
     { to: '/drivers', icon: '👤', label: 'Drivers' },
     { to: '/archive', icon: '🗄️', label: 'Archive' },
@@ -16,7 +16,7 @@ export default function Layout() {
   ]
 
   return (
-    <div className="app">
+    <div className="app admin-app">
       <div className="topbar">
         <div className="brand"><span className="mark">L</span> LFG <span className="gold">AUTO</span></div>
         <div className="row" style={{ alignItems:'center', gap:12 }}>

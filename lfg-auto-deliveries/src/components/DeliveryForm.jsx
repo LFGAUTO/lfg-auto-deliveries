@@ -5,7 +5,7 @@ import { useToast } from './Toast'
 import Modal from './Modal'
 
 const EMPTY = {
-  status: 'assigned',
+  status: 'assigned', dealership_address: '', return_plan: '', paperwork_status: 'pending',
   customer_name: '', customer_phone: '', delivery_address: '',
   delivery_date: '', delivery_time: '', driver1_name: '', driver2_name: '',
   dealer_by_time: '', cust_window_start: '', cust_window_end: '', cust_window_text: '',
@@ -51,6 +51,8 @@ export default function DeliveryForm({ existing, drivers, onClose, onSaved }) {
     if (!f.customer_name.trim()) { toast('Customer name is required'); return }
     if (d1Other && !f.driver1_name.trim()) { toast('Type the Driver 1 name'); return }
     if (d2Other && !f.driver2_name.trim()) { toast('Type the Driver 2 name'); return }
+    if (f.driver1_name && f.driver1_name === f.driver2_name) { toast('Choose two different drivers'); return }
+    if (f.cust_window_start && f.cust_window_end && f.cust_window_end < f.cust_window_start) { toast('Delivery window ends before it starts'); return }
     setBusy(true)
 
     // Turn any blank into a real null. Critical for date/time/timestamp columns —
@@ -63,7 +65,9 @@ export default function DeliveryForm({ existing, drivers, onClose, onSaved }) {
     // delivered_at, trade_picked_up_at, created_at) — those are managed by the
     // status workflow, not by editing a delivery.
     const payload = {
-      status: f.status,
+      dealership_address: clean(f.dealership_address), return_plan: clean(f.return_plan),
+      paperwork_status: f.paperwork_status,
+      ...(!existing ? { status: 'assigned' } : {}),
       customer_name: f.customer_name.trim(),
       customer_phone: clean(f.customer_phone),
       delivery_address: clean(f.delivery_address),
@@ -183,11 +187,13 @@ export default function DeliveryForm({ existing, drivers, onClose, onSaved }) {
       </div>
       {field('cust_window_text', 'Or type it (if no exact window)', 'text', { placeholder: 'e.g. early afternoon' })}
 
+      {field('return_plan', 'After this run / ride home', 'text', { placeholder: 'e.g. Next pickup at Bridgewater, then Uber home' })}
       {section('New Vehicle')}
       <div className="fg2">
         {field('dealership_name', 'Dealership Name')}
         {field('dealership_contact', 'Dealership Contact')}
       </div>
+      {field('dealership_address', 'Dealer pickup address', 'text', { placeholder: 'Full address for driver navigation' })}
       <div className="fg2">
         {field('dealership_phone', 'Salesman')}
         {field('vin', 'VIN')}
@@ -222,9 +228,9 @@ export default function DeliveryForm({ existing, drivers, onClose, onSaved }) {
           <label className="fld"><span>Where does it go?</span>
             <select value={f.trade_destination} onChange={set('trade_destination')}>
               <option value="office">Back to Office</option>
-              <option value="dealer">Dealer (lease return)</option>
+              <option value="dealer">Dealer / other destination</option>
             </select></label>
-          {f.trade_destination === 'dealer' && field('trade_return_dealer', 'Which Dealer (name & location)', 'text', { placeholder: 'e.g. Audi of Freehold' })}
+          {f.trade_destination === 'dealer' && field('trade_return_dealer', 'Return destination (name & full address)', 'text', { placeholder: 'e.g. Audi of Freehold' })}
           {area('trade_notes', 'Additional Trade Notes')}
         </>
       )}
@@ -250,6 +256,8 @@ export default function DeliveryForm({ existing, drivers, onClose, onSaved }) {
         </>
       )}
 
+      {section('Paperwork return')}
+      {['pending', 'not_required'].includes(f.paperwork_status || 'pending') ? <label className="check"><input type="checkbox" checked={f.paperwork_status === 'not_required'} onChange={e => setF(p => ({ ...p, paperwork_status: e.target.checked ? 'not_required' : 'pending' }))} />No original paperwork to return</label> : <p className="meta">Return already recorded: {f.paperwork_status}. See the closeout record.</p>}
       {section('Driver Pay')}
       <div className="fg2">
         {field('pay_amount', 'Delivery Value ($ per driver)', 'number')}

@@ -1,6 +1,6 @@
 import { useRef, useEffect } from 'react'
 
-export default function SignaturePad({ onChange }) {
+export default function SignaturePad({ onChange, initialValue }) {
   const canvasRef = useRef(null)
   const ctxRef = useRef(null)
   const drawing = useRef(false)
@@ -18,6 +18,12 @@ export default function SignaturePad({ onChange }) {
     ctx.lineCap = 'round'
     ctx.strokeStyle = '#0a0a0a'
     ctxRef.current = ctx
+    if (initialValue) {
+      const image = new Image()
+      image.onload = () => ctx.drawImage(image, 0, 0, rect.width, rect.height)
+      image.src = initialValue
+      empty.current = false
+    }
   }, [])
 
   const pos = (e) => {
