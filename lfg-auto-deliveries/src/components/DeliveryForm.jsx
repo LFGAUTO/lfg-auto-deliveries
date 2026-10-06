@@ -14,6 +14,7 @@ const EMPTY = {
   is_trade: false, trade_kind: 'trade', trade_year: '', trade_make: '', trade_model: '', trade_vin: '', trade_notes: '',
   trade_destination: 'office', trade_return_dealer: '',
   cod_required: false, cod_amount: '', cod_made_out_to: 'Dealer', cod_type: 'Check', cod_received: false,
+  pay_amount: 100, pay_exclude: false, pay_adjust: 0, pay_adjust_note: '',
   odometer: '', fuel_level: '', damage_noted: false, damage_notes: '',
   task_bluetooth: false, task_app: false, task_photo_client: false, task_photo_contract: false,
   admin_notes: '', driver_notes: '',
@@ -94,6 +95,10 @@ export default function DeliveryForm({ existing, drivers, onClose, onSaved }) {
       cod_made_out_to: f.cod_made_out_to,
       cod_type: f.cod_type,
       cod_received: f.cod_received,
+      pay_amount: f.pay_amount === '' || f.pay_amount == null ? 100 : Number(f.pay_amount),
+      pay_exclude: f.pay_exclude,
+      pay_adjust: f.pay_adjust === '' || f.pay_adjust == null ? 0 : Number(f.pay_adjust),
+      pay_adjust_note: clean(f.pay_adjust_note),
       admin_notes: clean(f.admin_notes),
     }
 
@@ -232,6 +237,14 @@ export default function DeliveryForm({ existing, drivers, onClose, onSaved }) {
           <label className="check"><input type="checkbox" checked={f.cod_received} onChange={set('cod_received')} /> COD Received</label>
         </>
       )}
+
+      {section('Driver Pay')}
+      <div className="fg2">
+        {field('pay_amount', 'Delivery Value ($ per driver)', 'number')}
+        {field('pay_adjust', 'Bonus / Deduction (+/- $)', 'number')}
+      </div>
+      {Number(f.pay_adjust) !== 0 && area('pay_adjust_note', 'Reason for bonus/deduction')}
+      <label className="check"><input type="checkbox" checked={f.pay_exclude} onChange={set('pay_exclude')} /> Exclude from payroll (don't pay — e.g. test delivery)</label>
 
       {section('Notes')}
       {area('admin_notes', 'Admin Notes')}
