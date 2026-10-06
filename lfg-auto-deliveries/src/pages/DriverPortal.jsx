@@ -35,6 +35,31 @@ export default function DriverPortal() {
   }
   useEffect(() => { load() }, [])
 
+  // This driver's own pay total for the current Sat–Fri week
+  const [payInfo, setPayInfo] = useState(null)
+  useEffect(() => {
+    const realName = (pick !== 'all' && pick !== '__un__') ? pick : null
+    if (!realName) { setPayInfo(null); return }
+    ;(async () => {
+      const n = new Date(); const back = (n.getDay() + 1) % 7
+      const start = new Date(n); start.setDate(n.getDate() - back); start.setHours(0, 0, 0, 0)
+      const end = new Date(start); end.setDate(start.getDate() + 6); end.setHours(23, 59, 59, 999)
+      const { data } = await supabase.from('deliveries')
+        .select('pay_amount,pay_adjust,pay_exclude,driver1_name,driver2_name,delivered_at')
+        .gte('delivered_at', start.toISOString()).lte('delivered_at', end.toISOString())
+      let total = 0, count = 0
+      ;(data || []).forEach(d => {
+        if (d.pay_exclude) return
+        if (d.driver1_name === realName || d.driver2_name === realName) {
+          total += Number(d.pay_amount ?? 100) + Number(d.pay_adjust || 0); count++
+        }
+      })
+      const { data: pd } = await supabase.from('payroll_paid').select('driver_name')
+        .eq('driver_name', realName).eq('week_start', start.toISOString().slice(0, 10))
+      setPayInfo({ total, count, paid: !!(pd && pd.length), label: `${start.toLocaleDateString()} – ${end.toLocaleDateString()}` })
+    })()
+  }, [pick, rows])
+
   // Live location sharing: ON while the selected driver has an EN ROUTE job, OFF otherwise.
   useEffect(() => {
     const realName = (pick !== 'all' && pick !== '__un__') ? pick : null
@@ -108,6 +133,18 @@ export default function DriverPortal() {
           ))}
           <button className={'btn sm ' + (pick === '__un__' ? 'gold' : 'ghost')} onClick={() => setPick('__un__')}>Unassigned</button>
         </div>
+
+        {payInfo && (
+          <div className="card" style={{ borderColor: payInfo.paid ? '#2f5d3a' : '#5a4a17', background: 'rgba(201,162,39,.08)', marginBottom: 14 }}>
+            <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center' }}>
+              <div>
+                <div className="gold" style={{ fontWeight: 800, fontSize: 18 }}>${payInfo.total.toFixed(2)} this week</div>
+                <div className="meta">{payInfo.count} deliver{payInfo.count === 1 ? 'y' : 'ies'} · pay week {payInfo.label}</div>
+              </div>
+              <span className="pill" style={{ color: payInfo.paid ? '#7bd88f' : '#e8d9a8' }}>{payInfo.paid ? 'PAID' : 'Pending'}</span>
+            </div>
+          </div>
+        )}
 
         {(() => {
           const shown = rows.filter(d => {
