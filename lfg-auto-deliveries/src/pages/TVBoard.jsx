@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef } from 'react'
 import { supabase } from '../lib/supabase'
-import { STATUS, fmtTime, vehicleLabel, todayISO } from '../lib/helpers'
+import { STATUS, fmtTime, fmtClock, custWindow, vehicleLabel, todayISO } from '../lib/helpers'
 import LiveMap from './LiveMap'
 
 const COLS = ['assigned', 'at_dealer', 'en_route', 'delivered', 'issue']
@@ -116,7 +116,9 @@ export default function TVBoard() {
                   ? <div className="l">🧑‍✈️ {driverName(d)}</div>
                   : <div className="l" style={{ color: '#e05757', fontWeight: 800 }}>⚠ UNASSIGNED</div>}
                 {d.dealership_name && <div className="l">🏢 {d.dealership_name}</div>}
-                <div className="l">🕒 {range === 'weekly' && d.delivery_date ? d.delivery_date + ' · ' : ''}{d.delivery_time || '—'} · updated {fmtTime(d.updated_at)}</div>
+                {d.dealer_by_time && <div className="l" style={{ color: '#f5c644', fontWeight: 800 }}>🏁 Dealer by {fmtClock(d.dealer_by_time)}</div>}
+                {custWindow(d) && <div className="l" style={{ color: '#9fd0ff', fontWeight: 700 }}>👤 {custWindow(d)}</div>}
+                <div className="l">🕒 {range === 'weekly' && d.delivery_date ? d.delivery_date + ' · ' : ''}updated {fmtTime(d.updated_at)}</div>
               </div>
             ))}
             {board.filter(d => d.status === s).length === 0 && <div className="l" style={{ textAlign: 'center', opacity: .5 }}>—</div>}
