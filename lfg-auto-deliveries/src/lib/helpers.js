@@ -27,6 +27,22 @@ export function todayISO() {
 export function vehicleLabel(d) {
   return [d.vyear, d.make, d.model].filter(Boolean).join(' ') || '—'
 }
+// "HH:MM" (24h from a <input type=time>) -> "9:30 AM"
+export function fmtClock(hm) {
+  if (!hm) return ''
+  const [h, m] = String(hm).split(':').map(Number)
+  if (isNaN(h)) return hm
+  const ap = h >= 12 ? 'PM' : 'AM'
+  const h12 = h % 12 === 0 ? 12 : h % 12
+  return `${h12}:${String(m || 0).padStart(2, '0')} ${ap}`
+}
+// The customer delivery window, as text. Uses the two time pickers, else the typed fallback.
+export function custWindow(d) {
+  if (d.cust_window_start && d.cust_window_end) return `${fmtClock(d.cust_window_start)} – ${fmtClock(d.cust_window_end)}`
+  if (d.cust_window_start) return `From ${fmtClock(d.cust_window_start)}`
+  if (d.cust_window_text) return d.cust_window_text
+  return ''
+}
 
 // Build a CSV string from an array of objects and trigger a download.
 export function downloadCSV(rows, filename) {
@@ -89,7 +105,7 @@ export function printDeliveryPacket(d) {
   </style></head><body>
     <div class="head">
       <div><div class="brand">LFG <span>AUTO</span></div><div class="sub">Delivery Packet</div></div>
-      <div class="sub" style="text-align:right">Date: ${esc(d.delivery_date)}<br>Time: ${esc(d.delivery_time)}<br>Status: ${esc(d.status)}</div>
+      <div class="sub" style="text-align:right">Date: ${esc(d.delivery_date)}<br>Be at dealer by: ${esc(fmtClock(d.dealer_by_time)) || '—'}<br>Customer window: ${esc(custWindow(d)) || '—'}<br>Status: ${esc(d.status)}</div>
     </div>
 
     <div class="twocol">
