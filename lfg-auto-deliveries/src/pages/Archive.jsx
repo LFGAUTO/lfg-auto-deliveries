@@ -4,19 +4,25 @@ import { useAuth } from '../context/AuthContext'
 import { useToast } from '../components/Toast'
 import { fmtDateTime, vehicleLabel, downloadCSV, printDeliveryPacket } from '../lib/helpers'
 import Modal from '../components/Modal'
+import Closeout from '../components/Closeout'
 
 export default function Archive() {
   const { profile, userName } = useAuth()
   const toast = useToast()
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
   const [rows, setRows] = useState([])
   const [q, setQ] = useState('')
   const [view, setView] = useState(null)
 
   async function load() {
-    const { data } = await supabase.from('deliveries')
+    const { data, error } = await supabase.from('deliveries')
       .select('*')
       .eq('archived', true).order('delivered_at', { ascending: false })
-    setRows(data || [])
+    setLoading(false)
+    if (error) { setError('Could not load archive'); return }
+    setError(''); setRows(data || [])
+    setView(current => current ? data.find(d => d.id === current.id) || null : null)
   }
   useEffect(() => { load() }, [])
 
@@ -41,6 +47,7 @@ export default function Archive() {
       Customer: d.customer_name, Phone: d.customer_phone, VIN: d.vin, Vehicle: vehicleLabel(d),
       Dealership: d.dealership_name, Driver: [d.driver1_name, d.driver2_name].filter(Boolean).join(' & '),
       DeliveryDate: d.delivery_date, DeliveredAt: d.delivered_at,
+      Paperwork: d.paperwork_status, PaperworkBy: d.paperwork_by, PaperworkAt: d.paperwork_at, TradeReturnedAt: d.trade_returned_at, CloseoutAt: d.closeout_completed_at,
       COD: d.cod_required ? d.cod_amount : '', Trade: d.is_trade ? `${d.trade_year} ${d.trade_make} ${d.trade_model}` : '',
       Damage: d.damage_noted ? d.damage_notes : '',
       ClientPhoto: d.client_photo_url || '', ContractPhoto: d.contract_photo_url || '', TradePhoto: d.trade_photo_url || '',
@@ -55,14 +62,15 @@ export default function Archive() {
   return (
     <>
       <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center' }}>
-        <div><div className="h1">Archive</div><div className="sub">Permanent delivery record · {rows.length} completed</div></div>
+        <div><div className="h1">Archive</div><div className="sub">Permanent delivery record · {loading ? 'Loading…' : `${rows.length} completed`}</div></div>
         <button className="btn ghost sm" onClick={exportCSV}>⬇ CSV</button>
       </div>
 
       <input placeholder="Search customer, VIN, driver, date, make, model…" value={q} onChange={e => setQ(e.target.value)} style={{ marginBottom: 14 }} />
 
       <div className="grid">
-        {filtered.length === 0 && <div className="muted">No completed deliveries found.</div>}
+        {error && <p role="alert">{error}</p>}
+        {!loading && !error && filtered.length === 0 && <div className="muted">No completed deliveries found.</div>}
         {filtered.map(d => (
           <div key={d.id} className="card dcard" onClick={() => setView(d)} style={{ cursor: 'pointer' }}>
             <div>
@@ -124,6 +132,7 @@ export default function Archive() {
           <Field label="Client Photo Taken" value={view.task_photo_client ? 'Yes' : 'No'} />
           <Field label="Contract Photo Taken" value={view.task_photo_contract ? 'Yes' : 'No'} />
 
+          <Closeout delivery={view} onSaved={load} />
           <div className="section-title">Sign-Off</div>
           {view.driver_signature && <img src={view.driver_signature} alt="signature" style={{ background: '#fff', borderRadius: 10, maxWidth: 260, marginTop: 6 }} />}
           <div className="row" style={{ marginTop: 10 }}>

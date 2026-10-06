@@ -1,3 +1,4 @@
+import { easternDay } from './workflow'
 export const STATUS = {
   assigned:  { label: 'Assigned',  color: '#9a9a93' },
   at_dealer: { label: 'At Dealer', color: '#1d6bb6' },
@@ -21,8 +22,7 @@ export function fmtDateTime(ts) {
   return new Date(ts).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
 }
 export function todayISO() {
-  const d = new Date(); d.setHours(0,0,0,0)
-  return d.toISOString().slice(0,10)
+  return easternDay()
 }
 export function vehicleLabel(d) {
   return [d.vyear, d.make, d.model].filter(Boolean).join(' ') || '—'

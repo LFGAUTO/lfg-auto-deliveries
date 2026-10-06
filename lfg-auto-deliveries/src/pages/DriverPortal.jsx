@@ -6,6 +6,9 @@ import { ISSUE_TYPES, vehicleLabel, fmtTime, fmtClock, custWindow, printDelivery
 import StatusPill from '../components/StatusPill'
 import Modal from '../components/Modal'
 import SignaturePad from '../components/SignaturePad'
+import Closeout from '../components/Closeout'
+import useRefresh from '../hooks/useRefresh'
+import { DISPATCH_PHONE, dayLabel, directions, driverNames, nextAction, tradeDestination, dateGroup } from '../lib/workflow'
 
 async function uploadPhoto(file, prefix) {
   if (!file) return null
@@ -21,19 +24,26 @@ export default function DriverPortal() {
   const toast = useToast()
   const [rows, setRows] = useState([])
   const [drivers, setDrivers] = useState([])
-  const [pick, setPick] = useState('all')
+  const [pick, setPick] = useState(() => localStorage.getItem('lfg-driver-name') || 'all')
+  const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState('')
+  const [busyId, setBusyId] = useState(null)
+  const [locationState, setLocationState] = useState('Not sharing')
+  const actor = pick !== 'all' && pick !== '__un__' ? pick : null
+  useEffect(() => { localStorage.setItem('lfg-driver-name', pick) }, [pick])
   const [deliverFor, setDeliverFor] = useState(null)
   const [issueFor, setIssueFor] = useState(null)
 
   async function load() {
-    const { data } = await supabase.from('deliveries')
-      .select('*').eq('archived', false)
+    const { data, error } = await supabase.from('deliveries')
+      .select('*').or('archived.eq.false,closeout_required.eq.true')
       .order('delivery_date', { ascending: true })
-    setRows(data || [])
+    if (error) { setLoadError('Could not load deliveries. Check your connection or contact Jess.'); setLoading(false); return }
+    setLoadError(''); setLoading(false); setRows(data || [])
     const { data: drv } = await supabase.from('drivers_roster').select('*').order('name')
     setDrivers(drv || [])
   }
-  useEffect(() => { load() }, [])
+  useRefresh(load)
 
   // This driver's own pay total for the current Sat–Fri week
   const [payInfo, setPayInfo] = useState(null)
@@ -68,20 +78,22 @@ export default function DriverPortal() {
       : null
 
     if (!realName || !myEnRoute || !navigator.geolocation) {
-      if (realName) supabase.from('live_locations').delete().eq('driver_name', realName) // stop sharing
+      setLocationState('Not sharing')
+      if (realName) supabase.from('live_locations').delete().eq('driver_name', realName)
       return
     }
 
     let stopped = false
     const send = () => navigator.geolocation.getCurrentPosition(
-      pos => {
+      async pos => {
         if (stopped) return
-        supabase.from('live_locations').upsert({
+        const { error } = await supabase.from('live_locations').upsert({
           driver_name: realName, lat: pos.coords.latitude, lng: pos.coords.longitude,
           customer: myEnRoute.customer_name, delivery_id: myEnRoute.id, updated_at: new Date().toISOString(),
         })
+        if (!stopped) setLocationState(error ? 'Location update failed' : 'Location shared · ' + fmtTime(new Date()))
       },
-      () => {}, { enableHighAccuracy: true, maximumAge: 10000, timeout: 15000 }
+      () => { if (!stopped) setLocationState('Location paused · check permission') }, { enableHighAccuracy: true, maximumAge: 10000, timeout: 15000 }
     )
     send()
     const t = setInterval(send, 25000)
@@ -89,28 +101,25 @@ export default function DriverPortal() {
   }, [pick, rows])
 
   async function logActivity(deliveryId, action) {
-    await supabase.from('activity_log').insert({ delivery_id: deliveryId, user_id: profile.id, user_name: userName, action })
+    await supabase.from('activity_log').insert({ delivery_id: deliveryId, user_id: profile.id, user_name: actor || userName, action })
   }
 
   const STATUS_LABEL = { assigned: 'Assigned', at_dealer: 'At Dealer', en_route: 'En Route', delivered: 'Delivered', issue: 'Issue' }
 
   async function setStatus(d, status, stampField) {
+    if (!actor) { toast('Select your name first'); return }
     const label = STATUS_LABEL[status] || status
     if (!window.confirm(`Mark ${d.customer_name} as ${label}?`)) return
     const patch = { status }
     if (stampField) patch[stampField] = new Date().toISOString()
+    setBusyId(d.id)
     const { error } = await supabase.from('deliveries').update(patch).eq('id', d.id)
+    setBusyId(null)
     if (error) { toast('Error: ' + error.message); return }
     await logActivity(d.id, `marked ${d.customer_name} — ${label}`)
     toast('Updated'); load()
   }
 
-  async function tradePickedUp(d) {
-    if (!window.confirm(`Confirm trade / lease return picked up for ${d.customer_name}?`)) return
-    const { error } = await supabase.from('deliveries').update({ trade_picked_up_at: new Date().toISOString() }).eq('id', d.id)
-    if (error) { toast('Error: ' + error.message); return }
-    await logActivity(d.id, `picked up the trade for ${d.customer_name}`); toast('Trade pickup saved'); load()
-  }
 
   return (
     <div className="app">
@@ -123,114 +132,56 @@ export default function DriverPortal() {
       </div>
 
       <div className="content">
-        <div className="h1">Active Deliveries</div>
-        <div className="sub">Pick your name to see your jobs and share your live location once you tap EN ROUTE · keep this screen open while driving</div>
-
-        <div className="row" style={{ gap: 8, flexWrap: 'wrap', margin: '12px 0 16px' }}>
-          <button className={'btn sm ' + (pick === 'all' ? 'gold' : 'ghost')} onClick={() => setPick('all')}>All</button>
-          {drivers.map(dr => (
-            <button key={dr.id} className={'btn sm ' + (pick === dr.name ? 'gold' : 'ghost')} onClick={() => setPick(dr.name)}>{dr.name}</button>
-          ))}
-          <button className={'btn sm ' + (pick === '__un__' ? 'gold' : 'ghost')} onClick={() => setPick('__un__')}>Unassigned</button>
-        </div>
-
-        {payInfo && (
-          <div className="card" style={{ borderColor: payInfo.paid ? '#2f5d3a' : '#5a4a17', background: 'rgba(201,162,39,.08)', marginBottom: 14 }}>
-            <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center' }}>
-              <div>
-                <div className="gold" style={{ fontWeight: 800, fontSize: 18 }}>${payInfo.total.toFixed(2)} this week</div>
-                <div className="meta">{payInfo.count} deliver{payInfo.count === 1 ? 'y' : 'ies'} · pay week {payInfo.label}</div>
-              </div>
-              <span className="pill" style={{ color: payInfo.paid ? '#7bd88f' : '#e8d9a8' }}>{payInfo.paid ? 'PAID' : 'Pending'}</span>
-            </div>
-          </div>
-        )}
-
+        <div className="page-heading"><div><div className="eyebrow">LFG driver operations</div><h1 className="h1">{actor ? `Your day, ${actor}.` : 'Your delivery day.'}</h1><p className="sub">Choose your name to record updates. Use controls only while parked.</p></div><a className="btn ghost sm" href={`tel:${DISPATCH_PHONE}`}>Contact dispatch · Jess</a></div>
+        <label className="fld driver-picker"><span>Driver</span><select value={pick} onChange={e => setPick(e.target.value)}><option value="all">All drivers · view only</option>{drivers.map(dr => <option key={dr.id} value={dr.name}>{dr.name}</option>)}<option value="__un__">Unassigned · view only</option></select></label>
+        {actor && <div className="sub" role="status">{locationState}</div>}
+        {payInfo && <div className="earnings-bar"><div><strong>${payInfo.total.toFixed(2)} this week</strong><p className="meta">{payInfo.count} deliveries · {payInfo.label}</p></div><span>{payInfo.paid ? 'Paid' : 'Pending'}</span></div>}
+        {loading && <p role="status">Loading deliveries…</p>}
+        {loadError && <div className="error-banner" role="alert">{loadError}<button className="btn ghost sm" onClick={load}>Retry</button></div>}
         {(() => {
-          const shown = rows.filter(d => {
-            if (!d.is_ready) return false   // drivers only see deliveries Jessica marked ready
-            if (pick === 'all') return true
-            if (pick === '__un__') return !d.driver1_name && !d.driver2_name
-            return d.driver1_name === pick || d.driver2_name === pick
-          })
-          return (<>
-        {shown.length === 0 && <div className="muted">No deliveries here right now.</div>}
-
-        <div className="grid">
-          {shown.map(d => (
-            <div key={d.id} className="card">
-              <div className="dcard">
-                <div style={{ width: '100%' }}>
-                  <div className="cn">{d.customer_name}</div>
-                  <div className="meta">{vehicleLabel(d)}{d.color ? ` · ${d.color}` : ''}</div>
-
-                  {d.dealer_by_time && (
-                    <div style={{ background: '#1b130a', border: '1px solid #5a4a17', borderRadius: 12, padding: '12px 14px', margin: '12px 0' }}>
-                      <div style={{ color: '#c9a227', fontSize: 11, fontWeight: 800, letterSpacing: 1.5 }}>BE AT DEALER BY</div>
-                      <div style={{ color: '#f5c644', fontSize: 34, fontWeight: 800, lineHeight: 1.1 }}>{fmtClock(d.dealer_by_time)}</div>
-                      {d.dealership_name && <div style={{ color: '#b89a4a', fontSize: 13 }}>{d.dealership_name}</div>}
-                    </div>
-                  )}
-                  {custWindow(d) && (
-                    <div style={{ background: '#0c1520', border: '1px solid #1d4a73', borderRadius: 12, padding: '10px 14px', margin: '10px 0' }}>
-                      <div style={{ color: '#5a9bd4', fontSize: 11, fontWeight: 800, letterSpacing: 1.5 }}>CUSTOMER EXPECTS DELIVERY</div>
-                      <div style={{ color: '#9fd0ff', fontSize: 22, fontWeight: 800, lineHeight: 1.1 }}>{custWindow(d)}</div>
-                    </div>
-                  )}
-
-                  <div className="meta gold">🔑 VIN: {d.vin || '—'}</div>
-                  {(d.driver1_name || d.driver2_name) && <div className="meta">🧑‍✈️ {[d.driver1_name, d.driver2_name].filter(Boolean).join(' & ')}</div>}
-                  <div className="meta">📍 {d.delivery_address || '—'}</div>
-                  <div className="meta">🗓 {d.delivery_date || '—'}</div>
-                  <div className="meta">📞 {d.customer_phone || '—'}</div>
-                  {d.dealership_name && <div className="meta">🏢 {d.dealership_name} {d.dealership_phone ? `· ${d.dealership_phone}` : ''}</div>}
-                  {d.cod_required && <div className="meta gold">💵 COD {d.cod_amount} ({d.cod_type}) to {d.cod_made_out_to}</div>}
-                  {d.admin_notes && <div className="meta">📝 {d.admin_notes}</div>}
-                  {d.is_trade && (
-                    <div style={{ marginTop: 8, padding: 10, border: '1px solid #1d6bb6', borderRadius: 10, background: 'rgba(29,107,182,.12)' }}>
-                      <div style={{ fontWeight: 800, color: '#7db8ec', fontSize: 12, letterSpacing: 1 }}>🔁 PICKING UP — {d.trade_kind === 'lease_return' ? 'LEASE RETURN' : 'TRADE'}</div>
-                      <div className="meta" style={{ color: '#cfe2f2' }}>{[d.trade_year, d.trade_make, d.trade_model].filter(Boolean).join(' ') || 'Trade / lease return'} · VIN {d.trade_vin || '—'}</div>
-                      <div className="meta" style={{ color: '#cfe2f2' }}>➡ Goes to: <strong>{d.trade_destination === 'dealer' ? (d.trade_return_dealer || 'Dealer') : 'Back to Office'}</strong></div>
-                      {d.trade_notes && <div className="meta" style={{ color: '#cfe2f2' }}>📝 {d.trade_notes}</div>}
-                    </div>
-                  )}
-                </div>
-                <StatusPill status={d.status} />
-              </div>
-
-              <hr />
-              <div className="grid" style={{ gap: 10 }}>
-                <button className="btn blue xl" onClick={() => setStatus(d, 'at_dealer', 'at_dealer_at')}>AT DEALER</button>
-                <button className="btn orange xl" onClick={() => setStatus(d, 'en_route', 'en_route_at')}>EN ROUTE</button>
-                <button className="btn green xl" onClick={() => setDeliverFor(d)}>DELIVERED</button>
-                {d.is_trade && <button className="btn ghost" onClick={() => tradePickedUp(d)}>
-                  TRADE PICKED UP {d.trade_picked_up_at ? `✓ ${fmtTime(d.trade_picked_up_at)}` : ''}</button>}
-                <button className="btn danger" onClick={() => setIssueFor(d)}>REPORT ISSUE</button>
-                <button className="btn ghost" onClick={() => printDeliveryPacket(d)}>🖨 Checklist PDF</button>
-              </div>
-            </div>
-          ))}
-        </div>
-          </>)
+          const shown = rows.filter(d => (d.is_ready || d.closeout_required) && (pick === 'all' || (pick === '__un__' ? !driverNames(d).length : driverNames(d).includes(pick))))
+          return <>{!loading && !loadError && !shown.length && <div className="empty-state">You’re all caught up. New live deliveries appear here automatically.</div>}
+          {['Overdue', 'Today', 'Upcoming', 'Date needed', 'Finish your returns'].map(group => {
+            const jobs = shown.filter(d => dateGroup(d) === group)
+            if (!jobs.length) return null
+            return <section key={group}><h2 className="section-title">{group} · {jobs.length}</h2><div className="driver-jobs">{jobs.map(d => <article className="card driver-job" key={d.id}>
+              <div className="dcard"><div><div className="eyebrow">{dayLabel(d.delivery_date)}</div><h2 className="cn">{d.customer_name}</h2><p className="meta">{vehicleLabel(d)}{d.color ? ` · ${d.color}` : ''}</p></div><StatusPill status={d.status} /></div>
+              {!d.delivered_at && <><div className="timing-grid"><div><span>Be at dealer by</span><strong>{fmtClock(d.dealer_by_time) || 'Time needed'}</strong><p>{d.dealership_name || 'Dealer needed'}</p></div><div><span>Customer window</span><strong>{custWindow(d) || 'Confirm with Jess'}</strong></div></div>
+              <div className="trip-list"><div><span>01</span><div><strong>{d.dealership_name || 'Pickup'}</strong><p>{d.dealership_address || 'Pickup address not provided'}</p></div></div><div><span>02</span><div><strong>Customer handoff</strong><p>{d.delivery_address || 'Address needed'}</p></div></div>{d.is_trade && <div><span>03</span><div><strong>Trade / lease return</strong><p>{tradeDestination(d)}</p><p>{d.trade_notes}</p></div></div>}{d.return_plan && <div><span>→</span><div><strong>After this run</strong><p>{d.return_plan}</p></div></div>}</div>
+              <div className="quick-actions">{d.dealership_address && <a className="btn ghost" href={directions(d.dealership_address)} target="_blank" rel="noreferrer">Navigate to dealer</a>}{d.delivery_address && <a className="btn ghost" href={directions(d.delivery_address)} target="_blank" rel="noreferrer">Navigate to customer</a>}{d.customer_phone && <a className="btn ghost" href={`tel:${d.customer_phone.replace(/[^+0-9]/g, '')}`}>Call customer</a>}</div>
+              <p className="meta">VIN: {d.vin || 'Not provided'} · {driverNames(d).join(' & ') || 'Unassigned'}</p>
+              {d.cod_required && <div className="payment-callout"><span>{d.cod_received ? 'COD collected' : 'Collect at handoff'}</span><strong>${d.cod_amount} · {d.cod_type}</strong><p>Payable to {d.cod_made_out_to}</p></div>}
+              {d.admin_notes && <div className="driver-note">{d.admin_notes}</div>}
+              <div className="next-step"><span className="eyebrow">Your next step</span><p>{nextAction(d)}</p></div>
+              {d.status === 'assigned' && <button disabled={!actor || busyId === d.id} className="btn gold xl" onClick={() => setStatus(d, 'at_dealer', 'at_dealer_at')}>I’m at the dealer →</button>}
+              {d.status === 'at_dealer' && <button disabled={!actor || busyId === d.id} className="btn gold xl" onClick={() => { if (confirm('Confirm VIN matches, vehicle condition checked, and keys / paperwork collected?')) setStatus(d, 'en_route', 'en_route_at') }}>Vehicle checked · En route →</button>}
+              {d.status === 'en_route' && <button disabled={!actor} className="btn gold xl" onClick={() => setDeliverFor(d)}>Complete customer handoff →</button>}
+              </>}
+              {d.delivered_at && <Closeout delivery={d} actor={actor} onSaved={load} />}
+              <div className="quick-actions"><button disabled={!actor} className="btn danger" onClick={() => setIssueFor(d)}>Report issue</button><a className="btn ghost" href={`tel:${DISPATCH_PHONE}`}>Call Jess</a><button className="btn ghost" onClick={() => printDeliveryPacket(d)}>Checklist PDF</button></div>
+            </article>)}</div></section>
+          })}</>
         })()}
+
       </div>
 
       {deliverFor && <DeliverModal d={deliverFor} onClose={() => setDeliverFor(null)}
         onDone={async (patch) => {
           const { error } = await supabase.from('deliveries').update({
-            ...patch, status: 'delivered', delivered_at: new Date().toISOString(), archived: true,
+            ...patch, status: 'delivered', delivered_at: new Date().toISOString(), archived: true, closeout_required: true, completed_by_name: actor,
           }).eq('id', deliverFor.id)
-          if (error) { toast('Error: ' + error.message); return }
+          if (error) { toast('Error: ' + error.message); return false }
           await logActivity(deliverFor.id, `completed ${deliverFor.customer_name}'s delivery`)
-          toast('Delivered & archived'); setDeliverFor(null); load()
+          toast('Customer handoff saved. Return tasks stay open.'); setDeliverFor(null); load(); return true
         }} />}
 
       {issueFor && <IssueModal d={issueFor} onClose={() => setIssueFor(null)}
         onDone={async ({ type, note, photo_url }) => {
-          await supabase.from('issues').insert({ delivery_id: issueFor.id, type, note, photo_url, created_by: profile.id, created_by_name: userName })
-          const patch = { status: 'issue' }
+          const { error: issueError } = await supabase.from('issues').insert({ delivery_id: issueFor.id, type, note, photo_url, created_by: profile.id, created_by_name: actor || userName })
+          if (issueError) { toast('Issue could not be saved'); return }
+          const patch = issueFor.delivered_at ? {} : { status: 'issue' }
           if (issueFor.status !== 'issue') patch.prev_status = issueFor.status
-          await supabase.from('deliveries').update(patch).eq('id', issueFor.id)
+          if (!issueFor.delivered_at) await supabase.from('deliveries').update(patch).eq('id', issueFor.id)
           await logActivity(issueFor.id, `reported an issue on ${issueFor.customer_name}: ${type}`)
           toast('Issue reported'); setIssueFor(null); load()
         }} />}
@@ -243,6 +194,10 @@ function DeliverModal({ d, onClose, onDone }) {
   const KEY = `lfg_deliver_draft_${d.id}`
   const saved = (() => { try { return JSON.parse(localStorage.getItem(KEY) || '{}') } catch { return {} } })()
 
+  const [phase, setPhase] = useState(0)
+  const [codReceived, setCodReceived] = useState(saved.codReceived ?? !!d.cod_received)
+  const [codException, setCodException] = useState(saved.codException || '')
+  const [tradeReceived, setTradeReceived] = useState(saved.tradeReceived ?? !!d.trade_picked_up_at)
   const [sig, setSig] = useState(saved.sig || null)
   const [ok, setOk] = useState(saved.ok || false)
   const [notes, setNotes] = useState(saved.notes || '')
@@ -263,9 +218,9 @@ function DeliverModal({ d, onClose, onDone }) {
 
   // Auto-save the parts we safely can (urls + fields) so a reload doesn't wipe progress.
   useEffect(() => {
-    const draft = { sig, ok, notes, tasks, eContract, refusedPic, clientUrl, contractUrl, tradeUrl, extraUrls }
+    const draft = { codReceived, codException, tradeReceived, sig, ok, notes, tasks, eContract, refusedPic, clientUrl, contractUrl, tradeUrl, extraUrls }
     try { localStorage.setItem(KEY, JSON.stringify(draft)) } catch {}
-  }, [sig, ok, notes, tasks, eContract, refusedPic, clientUrl, contractUrl, tradeUrl, extraUrls])
+  }, [codReceived, codException, tradeReceived, sig, ok, notes, tasks, eContract, refusedPic, clientUrl, contractUrl, tradeUrl, extraUrls])
 
   const tog = (k) => () => setTasks(p => ({ ...p, [k]: !p[k] }))
 
@@ -273,6 +228,7 @@ function DeliverModal({ d, onClose, onDone }) {
   function pick(file, folder, setFile, setUrl) {
     if (!file) return
     setFile(file)
+    setUrl(null)
     setUploading(n => n + 1)
     uploadPhoto(file, folder).then(url => { setUploading(n => n - 1); if (url) setUrl(url) })
       .catch(() => setUploading(n => n - 1))
@@ -283,8 +239,12 @@ function DeliverModal({ d, onClose, onDone }) {
     setUploading(n => n + 1)
     ;(async () => {
       const urls = []
-      for (const f of files) { try { const u = await uploadPhoto(f, 'extra'); if (u) urls.push(u) } catch {} }
+      for (const f of files) {
+        try { const u = await uploadPhoto(f, 'extra'); if (u) urls.push(u) } catch {}
+      }
       setUploading(n => n - 1)
+      if (urls.length !== files.length) toast('Some additional photos failed. Please select the missing photos again.')
+      setExtraFiles([])
       setExtraUrls(prev => [...prev, ...urls])
     })()
   }
@@ -297,6 +257,9 @@ function DeliverModal({ d, onClose, onDone }) {
   }
 
   async function submit() {
+    if (uploading) { toast('Wait for photo uploads to finish'); return }
+    if (d.cod_required && !codReceived && !codException.trim()) { toast('Confirm COD collected or explain the payment issue'); return }
+    if (d.is_trade && !tradeReceived) { toast('Confirm trade received or report an issue to Jess'); return }
     if (!sig) { toast('Driver signature required'); return }
     if (!ok) { toast('Confirm acceptable condition'); return }
     if (!clientFile && !clientUrl && !refusedPic) { toast('Client photo required (or mark Customer refused photo)'); return }
@@ -313,7 +276,9 @@ function DeliverModal({ d, onClose, onDone }) {
     if (!client_photo_url && !refusedPic) { setBusy(false); toast('Client photo did not upload - retry'); return }
     if (!contract_photo_url && !eContract) { setBusy(false); toast('Contract photo did not upload - retry'); return }
     if (d.is_trade && !trade_photo_url) { setBusy(false); toast('Trade photo did not upload - retry'); return }
-    await onDone({
+    const success = await onDone({
+      cod_received: codReceived, cod_exception: codReceived ? null : codException.trim() || null,
+      trade_picked_up_at: d.is_trade ? d.trade_picked_up_at || new Date().toISOString() : null,
       driver_signature: sig, delivered_condition_ok: true,
       driver_notes: notes || null,
       client_photo_url, contract_photo_url, trade_photo_url,
@@ -322,13 +287,13 @@ function DeliverModal({ d, onClose, onDone }) {
       task_photo_client: !!client_photo_url, task_photo_contract: !!contract_photo_url,
       e_contract: eContract, client_photo_refused: refusedPic,
     })
-    try { localStorage.removeItem(KEY) } catch {}
+    if (success) { try { localStorage.removeItem(KEY) } catch {} }
     setBusy(false)
   }
 
   const photoRow = (label, file, url, onFile) => (
     <label className="fld"><span>{label}{url ? ' - uploaded' : file ? ' - selected' : ''}</span>
-      <input type="file" accept="image/*" onChange={e => onFile(e.target.files[0])} />
+      <input type="file" accept="image/*" disabled={uploading > 0 || busy} onChange={e => onFile(e.target.files[0])} />
       {url && <a href={url} target="_blank" rel="noreferrer" className="meta" style={{ color: '#9bd' }}>view photo</a>}
     </label>
   )
@@ -338,18 +303,24 @@ function DeliverModal({ d, onClose, onDone }) {
   return (
     <Modal title="Complete Delivery" onClose={onClose}>
       <div className="sub">{d.customer_name} - {vehicleLabel(d)}</div>
+      <div className="handoff-tabs">{['Handoff', 'Photos', 'Sign off'].map((label, i) => <button key={label} className={'btn sm ' + (phase === i ? 'gold' : 'ghost')} onClick={() => setPhase(i)}>{i + 1}. {label}</button>)}</div>
+      <div hidden={phase !== 2}>
       <label className="fld"><span>Driver Signature</span></label>
-      <SignaturePad onChange={setSig} />
+      {phase === 2 && <SignaturePad initialValue={sig} onChange={setSig} />}
       {sig && <div className="meta" style={{ color: '#7bd88f', marginTop: -4 }}>Signature saved (sign again only if you need to redo it)</div>}
+      </div><div hidden={phase !== 0}>
       <label className="check" style={{ margin: '14px 0' }}>
         <input type="checkbox" checked={ok} onChange={e => setOk(e.target.checked)} /> Delivered in acceptable condition
       </label>
+      {d.cod_required && <div className="payment-callout"><strong>Collect ${d.cod_amount} · {d.cod_type}</strong><p>Payable to {d.cod_made_out_to}</p><label className="check"><input type="checkbox" checked={codReceived} onChange={e => setCodReceived(e.target.checked)} />COD collected</label>{!codReceived && <label className="fld"><span>Payment issue (if not collected)</span><textarea value={codException} onChange={e => setCodException(e.target.value)} /></label>}</div>}
+      {d.is_trade && <label className="check"><input type="checkbox" checked={tradeReceived} onChange={e => setTradeReceived(e.target.checked)} />Trade vehicle and keys received</label>}
       <div className="section-title">Delivery Tasks</div>
       <label className="check"><input type="checkbox" checked={tasks.bt} onChange={tog('bt')} /> Set up Bluetooth</label>
       <label className="check"><input type="checkbox" checked={tasks.box} onChange={tog('box')} /> Gave LFG Box</label>
       <label className="check"><input type="checkbox" checked={tasks.app} onChange={tog('app')} /> Installed Vehicle App</label>
       <label className="check"><input type="checkbox" checked={tasks.review} onChange={tog('review')} /> Asked for Review</label>
       <div style={{ height: 10 }} />
+      </div><div hidden={phase !== 1}>
       <label className="check"><input type="checkbox" checked={eContract} onChange={e => setEContract(e.target.checked)} /> E-Contract (no paper contract to photo)</label>
       <label className="check"><input type="checkbox" checked={refusedPic} onChange={e => setRefusedPic(e.target.checked)} /> Customer refused photo</label>
       <div style={{ height: 10 }} />
@@ -357,11 +328,14 @@ function DeliverModal({ d, onClose, onDone }) {
       {!eContract && photoRow('Contract Photo (required)', contractFile, contractUrl, f => pick(f, 'contract', setContractFile, setContractUrl))}
       {d.is_trade && photoRow('Trade / Lease Return Photo (required)', tradeFile, tradeUrl, f => pick(f, 'trade', setTradeFile, setTradeUrl))}
       <label className="fld"><span>Additional Photos (optional - pick any from your phone){extraCount ? ` - ${extraCount} added` : ''}</span>
-        <input type="file" accept="image/*" multiple onChange={e => pickExtra([...e.target.files])} /></label>
+        <input type="file" accept="image/*" multiple disabled={uploading > 0 || busy} onChange={e => pickExtra([...e.target.files])} /></label>
+      </div><div hidden={phase !== 2}>
       <label className="fld"><span>Notes (optional)</span><textarea value={notes} onChange={e => setNotes(e.target.value)} /></label>
-      <button className="btn green xl" onClick={submit} disabled={busy}>
+      <button className="btn green xl" onClick={submit} disabled={busy || uploading > 0}>
         {busy ? 'Saving...' : uploading > 0 ? 'Confirm Delivered (photos finishing...)' : 'Confirm Delivered'}
       </button>
+      </div>
+      {phase < 2 && <button className="btn gold" onClick={() => setPhase(phase + 1)}>Continue →</button>}
       <div style={{ marginTop: 12, padding: 10, borderRadius: 8, background: 'rgba(201,162,39,.12)', border: '1px solid #5a4a17', color: '#e8d9a8', fontSize: 13, textAlign: 'center', fontWeight: 700 }}>
         MUST COMPLETE IN FULL TO HAVE THIS DELIVERY ADDED TO THE TIMESHEET
       </div>
