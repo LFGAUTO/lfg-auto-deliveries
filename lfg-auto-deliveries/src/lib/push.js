@@ -10,10 +10,24 @@ function newIdentity() {
  localStorage.setItem(DEVICE_KEY,JSON.stringify(identity));return identity
 }
 export async function pushRequest(action,extra={}) {
- const {data,error}=await supabase.functions.invoke('driver-push',{body:{action,...extra}})
+ const signInMessage='Your login expired. Sign out and sign back in, then send the test again.'
+ const {data:sessionData,error:sessionError}=await supabase.auth.getSession()
+ if(sessionError||!sessionData?.session)throw new Error(signInMessage)
+ const invoke=token=>supabase.functions.invoke('driver-push',{
+  body:{action,...extra},headers:{Authorization:`Bearer ${token}`}
+ })
+ let {data,error}=await invoke(sessionData.session.access_token)
+ // Retry only an explicit authentication rejection, never an ambiguous send failure.
+ if(error?.context?.status===401){
+  const refreshed=await supabase.auth.refreshSession()
+  if(refreshed.error||!refreshed.data?.session)throw new Error(signInMessage)
+  ;({data,error}=await invoke(refreshed.data.session.access_token))
+ }
+
  if(error||data?.error){
   let reason=data?.error
   if(!reason&&error?.context){try{reason=(await error.context.json()).error}catch{}}
+  if(error?.context?.status===401)reason=signInMessage
   throw new Error(reason||'Alert request failed. Check your connection and try again.')
  }
  return data

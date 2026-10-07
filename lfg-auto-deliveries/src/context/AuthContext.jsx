@@ -16,17 +16,24 @@ export function AuthProvider({ children }) {
   }
 
   useEffect(() => {
-    supabase.auth.getSession().then(async ({ data }) => {
-      setSession(data.session)
-      await loadProfile(data.session?.user?.id)
+    // Never await another Supabase call inside the auth callback: it holds
+    // the session lock needed by database requests and token renewal.
+    const { data: sub } = supabase.auth.onAuthStateChange((_event, next) => {
+      setSession(next)
       setLoading(false)
-    })
-    const { data: sub } = supabase.auth.onAuthStateChange(async (_e, s) => {
-      setSession(s)
-      await loadProfile(s?.user?.id)
     })
     return () => sub.subscription.unsubscribe()
   }, [])
+
+  useEffect(() => {
+    let current = true
+    setProfile(null)
+    if (session?.user?.id) {
+      supabase.from('profiles').select('*').eq('id', session.user.id).single()
+        .then(({data}) => { if (current) setProfile(data || null) })
+    }
+    return () => { current = false }
+  }, [session?.user?.id])
 
   const value = {
     session, profile, loading,
