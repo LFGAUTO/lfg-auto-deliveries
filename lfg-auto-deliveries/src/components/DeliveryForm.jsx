@@ -257,10 +257,10 @@ export default function DeliveryForm({ existing, drivers, onClose, onSaved }) {
       )}
 
       {section('Paperwork return')}
-      {['pending', 'not_required'].includes(f.paperwork_status || 'pending') ? <label className="check"><input type="checkbox" checked={f.paperwork_status === 'not_required'} onChange={e => setF(p => ({ ...p, paperwork_status: e.target.checked ? 'not_required' : 'pending' }))} />No original paperwork to return</label> : <p className="meta">Return already recorded: {f.paperwork_status}. See the closeout record.</p>}
+      {['pending', 'not_required', 'e_contracts'].includes(f.paperwork_status || 'pending') ? <label className="fld"><span>Paperwork</span><select value={f.paperwork_status || 'pending'} onChange={set('paperwork_status')}><option value="pending">Original paperwork to return</option><option value="e_contracts">E-contracts · no paperwork to return</option><option value="not_required">No originals to return</option></select></label> : <p className="meta">Return already recorded: {f.paperwork_status}. See the closeout record.</p>}
       {section('Driver Pay')}
       <div className="fg2">
-        {field('pay_amount', 'Delivery Value ($ per driver)', 'number')}
+        {field('pay_amount', 'Driver pay ($ per driver)', 'number')}
         {field('pay_adjust', 'Bonus / Deduction (+/- $)', 'number')}
       </div>
       {Number(f.pay_adjust) !== 0 && area('pay_adjust_note', 'Reason for bonus/deduction')}

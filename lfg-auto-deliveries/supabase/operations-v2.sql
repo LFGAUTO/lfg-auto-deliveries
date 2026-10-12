@@ -24,7 +24,7 @@ begin
     new.closeout_required :=
       (coalesce(new.cod_required, false) and not coalesce(new.cod_received, false))
       or (coalesce(new.is_trade, false) and new.trade_returned_at is null)
-      or (coalesce(new.paperwork_status, 'pending') not in ('ups','dealer','not_required'));
+      or (coalesce(new.paperwork_status, 'pending') not in ('ups','dealer','office','not_required','e_contracts'));
     if new.closeout_required then new.closeout_completed_at := null;
     else new.closeout_completed_at := coalesce(new.closeout_completed_at, now()); end if;
   end if;

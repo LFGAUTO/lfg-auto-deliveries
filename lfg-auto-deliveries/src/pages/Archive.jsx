@@ -5,6 +5,7 @@ import { useToast } from '../components/Toast'
 import { fmtDateTime, vehicleLabel, downloadCSV, printDeliveryPacket } from '../lib/helpers'
 import Modal from '../components/Modal'
 import Closeout from '../components/Closeout'
+import DeliveryPay from '../components/DeliveryPay'
 
 export default function Archive() {
   const { profile, userName } = useAuth()
@@ -133,6 +134,7 @@ export default function Archive() {
           <Field label="Contract Photo Taken" value={view.task_photo_contract ? 'Yes' : 'No'} />
 
           <Closeout delivery={view} onSaved={load} />
+          <DeliveryPay key={view.id} delivery={view} onSaved={load} />
           <div className="section-title">Sign-Off</div>
           {view.driver_signature && <img src={view.driver_signature} alt="signature" style={{ background: '#fff', borderRadius: 10, maxWidth: 260, marginTop: 6 }} />}
           <div className="row" style={{ marginTop: 10 }}>

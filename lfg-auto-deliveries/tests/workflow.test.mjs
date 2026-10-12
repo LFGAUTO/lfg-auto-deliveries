@@ -9,8 +9,8 @@ test('Eastern date stays correct around midnight and daylight saving changes', (
   assert.equal(easternDay('2026-11-01T05:30:00Z'), '2026-11-01')
   assert.equal(easternDay(null), '')
 })
-test('office handoff remains pending and two drivers do not duplicate themselves', () => {
-  assert.deepEqual(outstanding({ paperwork_status: 'office' }), ['Paperwork · Jess / office'])
+test('office handoff completes paperwork and two drivers do not duplicate themselves', () => {
+  assert.deepEqual(outstanding({ paperwork_status: 'office' }), [])
   assert.deepEqual(driverNames({ driver1_name: 'Mike', driver2_name: 'Mike' }), ['Mike'])
   assert.equal(nextAction({ status: 'issue' }), 'Contact Jess · issue needs attention')
 })
@@ -21,6 +21,7 @@ test('database closeout survives staged returns, is rerunnable, and preserves hi
     await db.exec(`insert into deliveries(id, archived, delivered_at) values (1,true,'2026-10-01T12:00:00Z')`)
     const sql = await readFile(new URL('../supabase/operations-v2.sql', import.meta.url), 'utf8')
     await db.exec(sql); await db.exec(sql)
+    await db.exec(await readFile(new URL('../supabase/migrations/20261012234314_finish_driver_paperwork.sql', import.meta.url),'utf8'))
     const row = async id => (await db.query('select * from deliveries where id=$1', [id])).rows[0]
     assert.equal((await row(1)).closeout_required, false)
     assert.equal((await row(1)).paperwork_status, null)
@@ -45,5 +46,9 @@ test('database closeout survives staged returns, is rerunnable, and preserves hi
     assert.equal((await row(3)).closeout_required, false)
     await db.exec(`insert into deliveries(id, delivered_at, archived, paperwork_status, closeout_required) values(4,now(),true,'dealer',true)`)
     assert.equal((await row(4)).closeout_required, false)
+    for (const status of ['office','e_contracts']) {
+      await db.exec(`insert into deliveries(id, delivered_at, archived, paperwork_status, closeout_required) values(${status==='office'?5:6},now(),true,'${status}',true)`);
+      const d=await row(status==='office'?5:6);assert.equal(d.closeout_required,false);assert.ok(d.closeout_completed_at);assert.equal(Number(d.pay_amount),100)
+    }
   } finally { await db.close() }
 })

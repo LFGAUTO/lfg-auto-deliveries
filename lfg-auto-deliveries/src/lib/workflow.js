@@ -1,5 +1,5 @@
 export const DISPATCH_PHONE = '+17325470333'
-export const PAPERWORK = { pending: 'Paperwork pending', ups: 'Dropped off at UPS', dealer: 'Returned to dealer', office: 'With Jess / office', not_required: 'No originals to return' }
+export const PAPERWORK = { pending: 'Paperwork pending', ups: 'Dropped off at UPS', dealer: 'Returned to dealer', office: 'With Jess / office', not_required: 'No originals to return', e_contracts: 'E-contracts · no paperwork to return' }
 export function easternDay(value = new Date()) {
   if (!value) return ''
   return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(value))
@@ -19,7 +19,7 @@ export function outstanding(d) {
   const items = []
   if (d.cod_required && !d.cod_received) items.push('COD collection')
   if (d.is_trade && !d.trade_returned_at) items.push('Trade return')
-  if (!['ups', 'dealer', 'not_required'].includes(d.paperwork_status)) items.push(d.paperwork_status === 'office' ? 'Paperwork · Jess / office' : 'Paperwork return')
+  if (!['ups', 'dealer', 'office', 'not_required', 'e_contracts'].includes(d.paperwork_status)) items.push(d.paperwork_status === 'office' ? 'Paperwork · Jess / office' : 'Paperwork return')
   return items
 }
 export function nextAction(d) {

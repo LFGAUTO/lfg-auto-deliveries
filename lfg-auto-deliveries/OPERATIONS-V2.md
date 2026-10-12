@@ -19,7 +19,7 @@ Do not rerun `supabase/setup.sql` as a replacement for the new migration. The li
 - Actions follow Assigned → At dealer → En route → Customer handoff. Admin status corrections require a reason.
 - The customer handoff retains existing signature, condition, photo, and photo-exception requirements. COD must be collected or have a written exception. An exception remains outstanding for dispatch; it is not treated as money collected.
 - A delivery stays in the archive and payroll after handoff while unfinished COD, trade, and paperwork tasks remain accessible in the driver app and dispatch closeout queue.
-- Drivers confirm UPS handover, return to dealer (optional recipient), or handover to Jess / office. No tracking number or receipt upload is required. Office handover transfers the remaining paperwork task to Jess; it does not mark the final return complete.
+- Drivers confirm UPS handover, return to dealer (optional recipient), or handover to Jess / office. No tracking number or receipt upload is required. Office handover completes the driver’s paperwork task. E-contracts / no paperwork to return is also a completion option. A run closes once paperwork, any COD, and any trade return are complete.
 - Admin marks genuinely electronic deals **No original paperwork to return** in the delivery form. Selecting the e-contract photo exception does not automatically waive the return of other original documents.
 - The database trigger recomputes closeout from current row values, so independent COD / trade / paperwork updates cannot prematurely close a run. Historic records keep their existing closed state.
 - TV board retains daily, weekly, monthly, and fullscreen views. Four large cards per page rotate every 15 seconds. Data refreshes every 30 seconds, with last successful update and stale/error states. Pending closeout is included across date ranges so old unfinished returns stay visible.
@@ -38,3 +38,5 @@ Actual Supabase permissions, phone photo uploads, dialer behavior, and TV fullsc
 ## Rollback
 
 Restore the previous frontend deployment if needed. Leave additive columns and return data in place; do not drop them during a rollback. Avoid using the old frontend to complete new runs during rollback because it does not expose outstanding return tasks.
+
+Admins can edit pay on active deliveries using Edit, or on completed deliveries from Archive → delivery → Edit delivery pay. Archived edits update only pay fields and record the reason.
