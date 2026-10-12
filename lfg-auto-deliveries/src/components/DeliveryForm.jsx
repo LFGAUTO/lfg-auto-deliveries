@@ -250,7 +250,7 @@ export default function DeliveryForm({ existing, drivers, onClose, onSaved }) {
           </div>
           <label className="fld"><span>COD Type</span>
             <select value={f.cod_type} onChange={set('cod_type')}>
-              <option>Check</option><option>Cash</option><option>Other</option>
+              <option>Check</option><option>Cash</option><option>Zelle</option><option>Venmo</option><option>Other</option>
             </select></label>
           <label className="check"><input type="checkbox" checked={f.cod_received} onChange={set('cod_received')} /> COD Received</label>
         </>
