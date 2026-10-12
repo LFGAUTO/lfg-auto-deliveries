@@ -37,6 +37,7 @@ export default function DriverPortal() {
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState('')
   const [busyId, setBusyId] = useState(null)
+  const [statusError, setStatusError] = useState(null)
   const actor = pick !== 'all' && pick !== '__un__' ? pick : null
   useEffect(() => { localStorage.setItem('lfg-driver-name', pick) }, [pick])
   const [deliverFor, setDeliverFor] = useState(null)
@@ -85,18 +86,27 @@ export default function DriverPortal() {
   const STATUS_LABEL = { assigned: 'Assigned', at_dealer: 'At Dealer', en_route: 'En Route', delivered: 'Delivered', issue: 'Issue' }
 
   async function setStatus(d, status, stampField) {
-    if (!actor) { toast('Select your name first'); return }
+    setStatusError(null)
+    if (!actor) { setStatusError({id:d.id,message:'Choose your name in the Driver menu above, then tap again.'}); return }
+    if (!driverNames(d).includes(actor)) { setStatusError({id:d.id,message:'Choose one of the drivers assigned to this delivery.'}); return }
+    if (busyId) return
     const label = STATUS_LABEL[status] || status
-    if (!window.confirm(`Mark ${d.customer_name} as ${label}?`)) return
     const patch = { status }
     if (stampField) patch[stampField] = new Date().toISOString()
     setBusyId(d.id)
-    const { error } = await supabase.from('deliveries').update(patch).eq('id', d.id)
-    setBusyId(null)
-    if (error) { toast('Error: ' + error.message); return }
-    await logActivity(d.id, `marked ${d.customer_name} — ${label}`)
-    toast('Updated'); load()
+    try {
+      const { data, error } = await supabase.from('deliveries').update(patch)
+        .eq('id', d.id).eq('status', d.status).select('*').single()
+      if (error || !data) throw new Error(error?.message || 'Delivery changed. Refresh and try again.')
+      // Reflect the confirmed save before any secondary activity-log request.
+      setRows(current => current.map(row => row.id === d.id ? data : row))
+      toast(label + ' saved')
+      void logActivity(d.id, `marked ${d.customer_name} — ${label}`).catch(() => {})
+    } catch (error) {
+      setStatusError({id:d.id,message:'Could not save ' + label + ': ' + error.message + '. Tap again to retry.'})
+    } finally { setBusyId(null) }
   }
+
 
 
   return (
@@ -112,7 +122,8 @@ export default function DriverPortal() {
       <div className="content">
         <div className="page-heading"><div><div className="eyebrow">LFG driver operations</div><h1 className="h1">{actor ? `Your day, ${actor}.` : 'Your delivery day.'}</h1><p className="sub">Choose your name to record updates. Use controls only while parked.</p></div><a className="btn ghost sm" href={`tel:${DISPATCH_PHONE}`}>Contact dispatch · Jess</a></div>
         <label className="fld driver-picker"><span>Driver</span><select value={pick} onChange={e => setPick(e.target.value)}><option value="all">All drivers · view only</option>{drivers.map(dr => <option key={dr.id} value={dr.name}>{dr.name}</option>)}<option value="__un__">Unassigned · view only</option></select></label>
-        <PhoneAlerts drivers={drivers} onPhone={name => { setAlertPhone(name); if (linkedDelivery) setPick(name) }} />
+        {!actor && <p className="meta" role="status">Choose your name above to update a delivery. All drivers is a view-only list.</p>}
+        <PhoneAlerts drivers={drivers} onPhone={name => { setAlertPhone(name); setPick(current => linkedDelivery || current === 'all' ? name : current) }} />
         {payInfo && <div className="earnings-bar"><div><strong>${payInfo.total.toFixed(2)} this week</strong><p className="meta">{payInfo.count} deliveries · {payInfo.label}</p></div><span>{payInfo.paid ? 'Paid' : 'Pending'}</span></div>}
         {loading && <p role="status">Loading deliveries…</p>}
         {loadError && <div className="error-banner" role="alert">{loadError}<button className="btn ghost sm" onClick={load}>Retry</button></div>}
@@ -132,8 +143,9 @@ export default function DriverPortal() {
               {d.cod_required && <div className="payment-callout"><span>{d.cod_received ? 'COD collected' : 'Collect at handoff'}</span><strong>${d.cod_amount} · {d.cod_type}</strong><p>Payable to {d.cod_made_out_to}</p></div>}
               {d.admin_notes && <div className="driver-note">{d.admin_notes}</div>}
               <div className="next-step"><span className="eyebrow">Your next step</span><p>{nextAction(d)}</p></div>
-              {d.status === 'assigned' && <button disabled={!actor || busyId === d.id} className="btn gold xl" onClick={() => setStatus(d, 'at_dealer', 'at_dealer_at')}>I’m at the dealer →</button>}
-              {d.status === 'at_dealer' && <button disabled={!actor || busyId === d.id} className="btn gold xl" onClick={() => { if (confirm('Confirm VIN matches, vehicle condition checked, and keys / paperwork collected?')) setStatus(d, 'en_route', 'en_route_at') }}>Vehicle checked · En route →</button>}
+              {statusError?.id === d.id && <p className="error-banner" role="alert">{statusError.message}</p>}
+              {d.status === 'assigned' && <button disabled={!!busyId} className="btn gold xl" onClick={() => setStatus(d, 'at_dealer', 'at_dealer_at')}>{busyId === d.id ? 'Saving arrival…' : 'I’m at the dealer →'}</button>}
+              {d.status === 'at_dealer' && <button disabled={!!busyId} className="btn gold xl" onClick={() => { if (!actor) { setStatusError({id:d.id,message:'Choose your name in the Driver menu above, then tap again.'}); return } if (confirm('Confirm VIN matches, vehicle condition checked, and keys / paperwork collected?')) setStatus(d, 'en_route', 'en_route_at') }}>{busyId === d.id ? 'Saving departure…' : 'Vehicle checked · En route →'}</button>}
               {d.status === 'en_route' && <button disabled={!actor} className="btn gold xl" onClick={() => setDeliverFor(d)}>Complete customer handoff →</button>}
               </>}
               {d.delivered_at && <Closeout delivery={d} actor={actor} onSaved={load} />}
