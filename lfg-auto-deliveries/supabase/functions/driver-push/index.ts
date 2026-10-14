@@ -1,7 +1,7 @@
 import { createClient } from 'npm:@supabase/supabase-js@2.45.4'
 import webpush from 'npm:web-push@3.6.7'
-const cors = {'Access-Control-Allow-Origin':'https://lfgdelivery.netlify.app','Access-Control-Allow-Headers':'authorization, x-client-info, apikey, content-type','Access-Control-Allow-Methods':'POST, OPTIONS'}
-const respond=(data:unknown,status=200)=>new Response(JSON.stringify(data),{status,headers:{...cors,'Content-Type':'application/json'}})
+const baseCors = {'Access-Control-Allow-Origin':'https://lfgdelivery.netlify.app','Access-Control-Allow-Headers':'authorization, x-client-info, apikey, content-type, x-retry-count, traceparent, tracestate, baggage, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version','Access-Control-Allow-Methods':'POST, OPTIONS'}
+const appOrigins = ['https://lfgdelivery.netlify.app','https://delivery.lfgauto.com']
 const uuid=(s:unknown)=>typeof s==='string' && /^[0-9a-f]{8}-[0-9a-f-]{27}$/i.test(s)
 const hash=async(s:string)=>Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(s)))).map(x=>x.toString(16).padStart(2,'0')).join('')
 function validSubscription(s:any) {
@@ -11,7 +11,13 @@ function validSubscription(s:any) {
  } catch {return false}
 }
 Deno.serve(async(req)=>{
- if(req.method==='OPTIONS') return new Response('ok',{headers:cors})
+ const origin=req.headers.get('origin')||''
+ const cors={...baseCors,'Access-Control-Allow-Origin':appOrigins.includes(origin)?origin:appOrigins[0],'Vary':'Origin'}
+ const respond=(data:unknown,status=200)=>new Response(JSON.stringify(data),{status,headers:{...cors,'Content-Type':'application/json'}})
+ if(req.method==='OPTIONS') {
+  console.info('Push preflight', JSON.stringify({origin:req.headers.get('origin'),requested_headers:req.headers.get('access-control-request-headers')}))
+  return new Response('ok',{headers:cors})
+ }
  if(req.method!=='POST') return respond({error:'POST required'},405)
  const db=createClient(Deno.env.get('SUPABASE_URL')!,Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,{auth:{persistSession:false}})
  const must=async(q:any)=>{const r=await q;if(r.error)throw new Error('Database operation failed');return r.data}
