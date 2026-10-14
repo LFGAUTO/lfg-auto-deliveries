@@ -6,6 +6,7 @@ import { fmtDateTime, vehicleLabel, downloadCSV, printDeliveryPacket } from '../
 import Modal from '../components/Modal'
 import Closeout from '../components/Closeout'
 import DeliveryPay from '../components/DeliveryPay'
+import DeliveryDrivers from '../components/DeliveryDrivers'
 
 export default function Archive() {
   const { profile, userName } = useAuth()
@@ -102,6 +103,7 @@ export default function Archive() {
           <Field label="Phone" value={view.customer_phone} />
           <Field label="Address" value={view.delivery_address} />
           <Field label="Driver" value={[view.driver1_name, view.driver2_name].filter(Boolean).join(' & ')} />
+          <DeliveryDrivers key={view.id} delivery={view} onSaved={load} />
 
           <div className="section-title">Timestamps</div>
           <Field label="At Dealer" value={fmtDateTime(view.at_dealer_at)} />

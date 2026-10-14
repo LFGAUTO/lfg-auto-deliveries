@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
+import { payrollSettlement } from '../lib/payroll'
 import { useToast } from '../components/Toast'
 import { vehicleLabel, fmtDateTime, downloadCSV } from '../lib/helpers'
 
@@ -114,11 +115,16 @@ export default function Reports() {
   const payNames = Object.keys(payTally).sort()
   const driverTotal = (name) => (payTally[name] || []).reduce((s, l) => s + l.base + l.adj, 0)
   const grandTotal = payNames.reduce((s, n) => s + driverTotal(n), 0)
-  const isPaid = (name) => paid.find(p => p.driver_name === name && p.week_start === pStartISO)
+  const paymentRecord = (name) => paid.find(p => p.driver_name === name && p.week_start === pStartISO)
+  const settlement = (name) => payrollSettlement(paymentRecord(name), driverTotal(name), (payTally[name] || []).length)
+  const isPaid = (name) => settlement(name).settled
 
   async function markPaid(name) {
     const total = driverTotal(name)
-    if (!confirm(`Mark ${name} PAID for ${payLabel}?\nTotal: ${money(total)} (${(payTally[name] || []).length} deliveries)`)) return
+    const prior = paymentRecord(name)
+    const payment = settlement(name)
+    const prompt = prior ? `Update ${name}'s paid record for ${payLabel}?\nPreviously recorded: ${money(payment.paidAmount)}. Current total: ${money(total)}.\n${payment.balance > 0 ? `Confirm the additional ${money(payment.balance)} has been paid.` : 'Confirm the revised total has been reconciled.'}` : `Mark ${name} PAID for ${payLabel}?\nTotal: ${money(total)} (${(payTally[name] || []).length} deliveries)`
+    if (!confirm(prompt)) return
     const { error } = await supabase.from('payroll_paid').upsert({
       driver_name: name, week_start: pStartISO, amount: total,
       deliveries: (payTally[name] || []).length, paid_by: userName, paid_at: new Date().toISOString(),
@@ -134,7 +140,7 @@ export default function Reports() {
   function exportPay() {
     const rows = []
     payNames.forEach(name => payTally[name].forEach(l => rows.push({
-      Driver: name, Paid: isPaid(name) ? 'YES' : 'NO', Customer: l.d.customer_name,
+      Driver: name, Paid: isPaid(name) ? 'YES' : (paymentRecord(name) ? 'REVIEW' : 'NO'), WeekPaidAmount: settlement(name).paidAmount.toFixed(2), WeekBalance: settlement(name).balance.toFixed(2), Customer: l.d.customer_name,
       Vehicle: vehicleLabel(l.d), Delivered: l.d.delivered_at ? new Date(l.d.delivered_at).toLocaleString() : '',
       Value: l.base.toFixed(2), Adjust: l.adj.toFixed(2),
       LineTotal: (l.base + l.adj).toFixed(2), AdjustNote: l.d.pay_adjust_note || '',
@@ -145,7 +151,7 @@ export default function Reports() {
   function printPay() {
     const esc = s => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;')
     const body = payNames.map(name => `
-      <h3>${esc(name)} — ${money(driverTotal(name))} ${isPaid(name) ? '(PAID)' : ''}</h3>
+      <h3>${esc(name)} — ${money(driverTotal(name))} ${isPaid(name) ? '(PAID)' : paymentRecord(name) ? `(REVIEW: recorded ${money(settlement(name).paidAmount)}, balance ${money(settlement(name).balance)})` : ''}</h3>
       <table><tr><th>Customer</th><th>Vehicle</th><th>Delivered</th><th>Value</th><th>+/-</th><th>Total</th></tr>
       ${payTally[name].map(l => `<tr><td>${esc(l.d.customer_name)}</td><td>${esc(vehicleLabel(l.d))}</td>
         <td>${l.d.delivered_at ? new Date(l.d.delivered_at).toLocaleString() : ''}</td>
@@ -250,6 +256,7 @@ export default function Reports() {
           <div className="grid" style={{ marginTop: 14 }}>
             {payNames.map(name => {
               const p = isPaid(name)
+              const payment = settlement(name)
               return (
                 <div key={name} className="card" style={{ borderColor: p ? '#2f5d3a' : undefined }}>
                   <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center' }}>
@@ -262,10 +269,11 @@ export default function Reports() {
                       • {l.d.customer_name} — {vehicleLabel(l.d)} · {money(l.base)}{l.adj ? ` ${l.adj > 0 ? '+' : ''}${money(l.adj)} (${l.d.pay_adjust_note || 'adj'})` : ''}
                     </div>
                   ))}
+                  {payment.changed && <p className="meta" role="status">Previously marked paid: {money(payment.paidAmount)} · {payment.balance > 0 ? `Additional owed: ${money(payment.balance)}` : payment.balance < 0 ? `Review payment difference: ${money(payment.balance)}` : 'Delivery count changed — review required'}</p>}
                   <div className="btnrow" style={{ marginTop: 10 }}>
                     {p
                       ? <button className="btn ghost sm" onClick={() => unmarkPaid(name)}>Undo Paid</button>
-                      : <button className="btn green sm" onClick={() => markPaid(name)}>✓ Mark Paid ({money(driverTotal(name))})</button>}
+                      : <button className="btn green sm" onClick={() => markPaid(name)}>{payment.changed ? (payment.balance > 0 ? `Confirm additional ${money(payment.balance)} paid` : 'Confirm revised paid total') : `✓ Mark Paid (${money(driverTotal(name))})`}</button>}
                   </div>
                 </div>
               )

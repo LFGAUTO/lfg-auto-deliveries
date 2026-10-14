@@ -1,3 +1,4 @@
+import { payrollSettlement } from '../lib/payroll'
 import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
@@ -73,9 +74,10 @@ export default function DriverPortal() {
           total += Number(d.pay_amount ?? 100) + Number(d.pay_adjust || 0); count++
         }
       })
-      const { data: pd } = await supabase.from('payroll_paid').select('driver_name')
+      const { data: pd } = await supabase.from('payroll_paid').select('driver_name,amount,deliveries')
         .eq('driver_name', realName).eq('week_start', start.toISOString().slice(0, 10))
-      setPayInfo({ total, count, paid: !!(pd && pd.length), label: `${start.toLocaleDateString()} – ${end.toLocaleDateString()}` })
+      const payment = payrollSettlement(pd?.[0], total, count)
+      setPayInfo({ total, count, paid: payment.settled, changed: payment.changed, balance: payment.balance, label: `${start.toLocaleDateString()} – ${end.toLocaleDateString()}` })
     })()
   }, [pick, rows])
 
@@ -124,7 +126,7 @@ export default function DriverPortal() {
         <label className="fld driver-picker"><span>Driver</span><select value={pick} onChange={e => setPick(e.target.value)}><option value="all">All drivers · view only</option>{drivers.map(dr => <option key={dr.id} value={dr.name}>{dr.name}</option>)}<option value="__un__">Unassigned · view only</option></select></label>
         {!actor && <p className="meta" role="status">Choose your name above to update a delivery. All drivers is a view-only list.</p>}
         <PhoneAlerts drivers={drivers} onPhone={name => { setAlertPhone(name); setPick(current => linkedDelivery || current === 'all' ? name : current) }} />
-        {payInfo && <div className="earnings-bar"><div><strong>${payInfo.total.toFixed(2)} this week</strong><p className="meta">{payInfo.count} deliveries · {payInfo.label}</p></div><span>{payInfo.paid ? 'Paid' : 'Pending'}</span></div>}
+        {payInfo && <div className="earnings-bar"><div><strong>${payInfo.total.toFixed(2)} this week</strong><p className="meta">{payInfo.count} deliveries · {payInfo.label}</p></div><span>{payInfo.paid ? 'Paid' : payInfo.changed ? (payInfo.balance > 0 ? `$${payInfo.balance.toFixed(2)} pending` : 'Pay adjustment under review') : 'Pending'}</span></div>}
         {loading && <p role="status">Loading deliveries…</p>}
         {loadError && <div className="error-banner" role="alert">{loadError}<button className="btn ghost sm" onClick={load}>Retry</button></div>}
         {(() => {
