@@ -133,3 +133,22 @@ textarea{min-height:80px;resize:vertical}
 [hidden]{display:none!important}
 
 .dispatch-job,.driver-job,.tv-run{overflow-wrap:anywhere}.tv-controls .btn{min-height:40px}
+
+/* Seven-day office schedule; keep every weekday visible on TV. */
+.tv-week-scroll{overflow-x:auto;padding-bottom:8px}
+.tv-week-grid{display:grid;grid-template-columns:repeat(7,minmax(150px,1fr));gap:10px;align-items:start}
+.tv-day{min-width:0;border:1px solid var(--line);border-radius:12px;background:var(--panel);padding:10px}
+.tv-day.is-today{border-color:var(--gold);box-shadow:inset 0 3px var(--gold)}
+.tv-day-heading{border-bottom:1px solid var(--line);padding-bottom:12px;margin-bottom:12px}
+.tv-day-heading h2{font-size:clamp(16px,1.2vw,24px);color:var(--gold2);margin:0 0 5px}
+.tv-day-heading p,.tv-day-heading span{font-size:13px;color:var(--muted);margin:3px 0}
+.tv-day .tv-run{padding:12px 9px;margin-top:10px;border-left-width:3px;background:var(--bg)}
+.tv-day .tv-run .spread{gap:7px;flex-wrap:wrap}
+.tv-day .tv-run h2{font-size:clamp(16px,1.1vw,23px)}
+.tv-day .tv-run h3{font-size:clamp(15px,1vw,20px);margin:10px 0 5px}
+.tv-day .tv-run p,.tv-day .tv-times{font-size:13px}
+.tv-day .tv-status{font-size:10px;padding:4px 6px}
+.tv-day .tv-times{gap:8px;flex-direction:column}
+.tv-day .tv-next strong{font-size:14px}
+.tv-day .tv-next span{font-size:10px}
+.tv-day-empty{font-size:13px;color:var(--muted);padding:20px 0;text-align:center}
