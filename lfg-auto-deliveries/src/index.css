@@ -134,9 +134,9 @@ textarea{min-height:80px;resize:vertical}
 
 .dispatch-job,.driver-job,.tv-run{overflow-wrap:anywhere}.tv-controls .btn{min-height:40px}
 
-/* Seven-day office schedule; keep every weekday visible on TV. */
+/* Five-day office schedule; keep every weekday visible on TV. */
 .tv-week-scroll{overflow-x:auto;padding-bottom:8px}
-.tv-week-grid{display:grid;grid-template-columns:repeat(7,minmax(150px,1fr));gap:10px;align-items:start}
+.tv-week-grid{display:grid;grid-template-columns:repeat(5,minmax(150px,1fr));gap:10px;align-items:start}
 .tv-day{min-width:0;border:1px solid var(--line);border-radius:12px;background:var(--panel);padding:10px}
 .tv-day.is-today{border-color:var(--gold);box-shadow:inset 0 3px var(--gold)}
 .tv-day-heading{border-bottom:1px solid var(--line);padding-bottom:12px;margin-bottom:12px}

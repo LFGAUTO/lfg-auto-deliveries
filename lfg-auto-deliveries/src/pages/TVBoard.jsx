@@ -8,7 +8,7 @@ const BOARD_FILTERS = [['live', 'Live'], ['delivered', 'Delivered'], ['drafts', 
 function daysOfWeek(today) {
   const monday = new Date(today + 'T12:00:00Z')
   monday.setUTCDate(monday.getUTCDate() - (monday.getUTCDay() + 6) % 7)
-  return Array.from({ length: 7 }, (_, i) => {
+  return Array.from({ length: 5 }, (_, i) => {
     const day = new Date(monday); day.setUTCDate(day.getUTCDate() + i)
     return { date: easternDay(day), label: day.toLocaleDateString('en-US', { timeZone: 'America/New_York', weekday: 'long' }), short: day.toLocaleDateString('en-US', { timeZone: 'America/New_York', month: 'short', day: 'numeric' }) }
   })
@@ -42,7 +42,7 @@ export default function TVBoard() {
   useEffect(() => { const t = setInterval(() => setNow(new Date()), 1000); return () => clearInterval(t) }, [])
   const today = easternDay(now)
   const weekDays = daysOfWeek(today)
-  const weekStart = weekDays[0].date, weekEnd = weekDays[6].date
+  const weekStart = weekDays[0].date, weekEnd = weekDays[4].date
   const board = rows.filter(d => {
     const delivered = !!d.delivered_at || d.status === 'delivered' || !!d.archived
     if (filter === 'live' && (!d.is_ready || delivered)) return false
