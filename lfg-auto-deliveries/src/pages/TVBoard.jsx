@@ -4,10 +4,17 @@ import { STATUS, fmtTime, fmtClock, custWindow, vehicleLabel } from '../lib/help
 import { easternDay, driverNames, nextAction, PAPERWORK } from '../lib/workflow'
 import useRefresh from '../hooks/useRefresh'
 
+const BOARD_FILTERS = [['live', 'Live'], ['delivered', 'Delivered'], ['drafts', 'Drafts'], ['closeout', 'Closeout pending'], ['all', 'All']]
+const FILTER_KEY = 'lfg-tv-status-filter'
+
 export default function TVBoard() {
   const [rows, setRows] = useState([])
   const [now, setNow] = useState(new Date())
   const [range, setRange] = useState('daily')
+  const [filter, setFilter] = useState(() => {
+    try { const saved = localStorage.getItem(FILTER_KEY); return BOARD_FILTERS.some(([v]) => v === saved) ? saved : 'live' } catch { return 'live' }
+  })
+  useEffect(() => { try { localStorage.setItem(FILTER_KEY, filter) } catch {} }, [filter])
   const [page, setPage] = useState(0)
   const [updated, setUpdated] = useState(null)
   const [error, setError] = useState('')
@@ -24,6 +31,11 @@ export default function TVBoard() {
   const start = new Date(today + 'T12:00:00Z'); start.setUTCDate(start.getUTCDate() - start.getUTCDay())
   const weekStart = easternDay(start); const end = new Date(start); end.setUTCDate(end.getUTCDate() + 6); const weekEnd = easternDay(end)
   const board = rows.filter(d => {
+    const delivered = !!d.delivered_at || d.status === 'delivered' || !!d.archived
+    if (filter === 'live' && (!d.is_ready || delivered)) return false
+    if (filter === 'delivered' && !delivered) return false
+    if (filter === 'drafts' && (d.is_ready || delivered)) return false
+    if (filter === 'closeout' && !d.closeout_required) return false
     if (d.closeout_required) return true
     const date = d.delivered_at ? easternDay(d.delivered_at) : d.delivery_date
     if (range === 'monthly') return date?.slice(0,7) === today.slice(0,7)
@@ -31,7 +43,7 @@ export default function TVBoard() {
     return date === today || (!d.archived && (!date || date < today))
   }).sort((a,b) => (a.status === 'issue' ? -1 : b.status === 'issue' ? 1 : 0) || driverNames(a).join().localeCompare(driverNames(b).join()) || (a.dealer_by_time || '').localeCompare(b.dealer_by_time || ''))
   const pages = Math.max(1, Math.ceil(board.length / 4))
-  useEffect(() => { setPage(0) }, [range, pages])
+  useEffect(() => { setPage(0) }, [range, filter, pages])
   useEffect(() => { const t = setInterval(() => setPage(p => (p + 1) % pages), 15000); return () => clearInterval(t) }, [pages])
   const visible = board.slice((page % pages) * 4, (page % pages) * 4 + 4)
   const issues = board.filter(d => d.status === 'issue')
@@ -42,10 +54,13 @@ export default function TVBoard() {
   }
   return <div className="tv tv-v2" ref={wrapRef}>
     <header className="tv-head"><div><div className="eyebrow">LFG AUTO · OFFICE OPERATIONS</div><h1 className="tv-title">{range === 'daily' ? 'Today’s deliveries' : range === 'weekly' ? 'This week’s deliveries' : 'This month’s deliveries'}</h1><p className="tv-clock">{now.toLocaleString('en-US', { timeZone: 'America/New_York', weekday: 'long', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })} ET</p></div><div className="tv-controls"><div className="row">{[['daily','Daily'],['weekly','Weekly'],['monthly','Monthly']].map(([v,l]) => <button key={v} className={'btn sm ' + (range === v ? 'gold' : 'ghost')} onClick={() => { setRange(v) }}>{l}</button>)}<button className="btn ghost sm" onClick={goFull}>Fullscreen</button></div></div></header>
+    <div className="row" role="group" aria-label="Delivery status filter" style={{ flexWrap: 'wrap', gap: 8, marginBottom: 16 }}>
+      {BOARD_FILTERS.map(([value, label]) => <button key={value} type="button" aria-pressed={filter === value} className={'btn sm ' + (filter === value ? 'gold' : 'ghost')} onClick={() => setFilter(value)}>{label}</button>)}
+    </div>
     <div className="tv-totals"><span><b>{board.length}</b> Jobs</span><span><b>{board.filter(d => !!d.delivered_at).length}</b> Delivered</span><span><b>{issues.length}</b> Issues</span><span><b>{closeout.length}</b> Closeout pending</span></div>
     {(error || stale) && <div className="error-banner" role="alert">{error || (updated ? 'Updates are stale · check connection' : 'Loading delivery board…')}</div>}
     {!!issues.length && <div className="attention-banner"><strong>Needs attention</strong><span>{issues.map(d => driverNames(d).join(' & ') || 'Unassigned').join(' · ')} · Dispatch: Jess</span></div>}
-    <div className="tv-job-grid">{visible.map(d => <article className="tv-run" key={d.id} style={{ borderLeftColor: STATUS[d.status]?.color || '#888' }}><div className="row spread"><h2>{driverNames(d).join(' & ') || 'UNASSIGNED'}</h2><span className="tv-status">{d.is_ready || d.delivered_at ? STATUS[d.status]?.label : 'Draft'}</span></div><h3>{d.customer_name?.split(' ')[0] || 'Customer'} · {vehicleLabel(d)}</h3><p>{d.dealership_name || 'Pickup dealer needed'}</p><div className="tv-times"><span>Dealer by <b>{fmtClock(d.dealer_by_time) || '—'}</b></span><span>Customer <b>{custWindow(d) || '—'}</b></span></div><div className="tv-next"><span>NEXT ACTION</span><strong>{d.is_ready || d.delivered_at ? nextAction(d) : 'Jess to publish delivery'}</strong></div>{d.delivered_at && <p>{PAPERWORK[d.paperwork_status] || 'Legacy delivery record'}</p>}{range !== 'daily' && <p>{d.delivery_date}</p>}</article>)}{updated && !board.length && <div className="empty-state">No deliveries in this view. The board will update automatically.</div>}</div>
-    <footer className="tv-footer"><span>{updated ? `Last successful update ${fmtTime(updated)}` : 'Connecting…'} · {stale || error ? 'Check connection' : 'Auto-refresh every 30 seconds'}</span><span>Page {(page % pages) + 1} of {pages}{pages > 1 ? ' · Rotates every 15 seconds' : ''}</span></footer>
+    <div className="tv-job-grid">{visible.map(d => <article className="tv-run" key={d.id} style={{ borderLeftColor: STATUS[d.status]?.color || '#888' }}><div className="row spread"><h2>{driverNames(d).join(' & ') || 'UNASSIGNED'}</h2><span className="tv-status">{d.is_ready || d.delivered_at ? STATUS[d.status]?.label : 'Draft'}</span></div><h3>{d.customer_name?.split(' ')[0] || 'Customer'} · {vehicleLabel(d)}</h3><p>{d.dealership_name || 'Pickup dealer needed'}</p><div className="tv-times"><span>Dealer by <b>{fmtClock(d.dealer_by_time) || '—'}</b></span><span>Customer <b>{custWindow(d) || '—'}</b></span></div><div className="tv-next"><span>NEXT ACTION</span><strong>{d.is_ready || d.delivered_at ? nextAction(d) : 'Jess to publish delivery'}</strong></div>{d.delivered_at && <p>{PAPERWORK[d.paperwork_status] || 'Legacy delivery record'}</p>}{range !== 'daily' && <p>{d.delivery_date}</p>}</article>)}{updated && !board.length && <div className="empty-state">No deliveries match this filter and date range. The board will update automatically.</div>}</div>
+    <footer className="tv-footer"><span>{BOARD_FILTERS.find(([v]) => v === filter)?.[1]} view · {updated ? `Last successful update ${fmtTime(updated)}` : 'Connecting…'} · {stale || error ? 'Check connection' : 'Auto-refresh every 30 seconds'}</span><span>Page {(page % pages) + 1} of {pages}{pages > 1 ? ' · Rotates every 15 seconds' : ''}</span></footer>
   </div>
 }
