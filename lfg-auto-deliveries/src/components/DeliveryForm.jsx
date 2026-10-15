@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 import { useToast } from './Toast'
@@ -28,8 +28,14 @@ export default function DeliveryForm({ existing, drivers, onClose, onSaved }) {
   const [busy, setBusy] = useState(false)
   const [d1Other, setD1Other] = useState(false)
   const [d2Other, setD2Other] = useState(false)
+  const initializedDelivery = useRef(undefined)
 
   useEffect(() => {
+    // Polling and window focus refresh the roster with a new array. Initialize
+    // once per delivery, never overwrite an open draft on background refresh.
+    const deliveryId = existing?.id ?? null
+    if (initializedDelivery.current === deliveryId) return
+    initializedDelivery.current = deliveryId
     if (existing) {
       const merged = { ...EMPTY, ...existing }
       // Only normalize the fields this form edits; never touch DB-managed
@@ -39,6 +45,10 @@ export default function DeliveryForm({ existing, drivers, onClose, onSaved }) {
       const names = drivers.map(d => d.name)
       setD1Other(!!merged.driver1_name && !names.includes(merged.driver1_name))
       setD2Other(!!merged.driver2_name && !names.includes(merged.driver2_name))
+    } else {
+      setF({ ...EMPTY })
+      setD1Other(false)
+      setD2Other(false)
     }
   }, [existing, drivers])
 
