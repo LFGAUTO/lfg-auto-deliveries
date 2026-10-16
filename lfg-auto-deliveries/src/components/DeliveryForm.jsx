@@ -3,6 +3,8 @@ import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 import { useToast } from './Toast'
 import Modal from './Modal'
+import SavedChoice from './SavedChoice'
+import { compileDeliveryChoices, loadDeliveryChoices, selectDealer, uniqueChoices, choiceKey } from '../lib/deliveryChoices'
 
 const EMPTY = {
   status: 'assigned', dealership_address: '', return_plan: '', paperwork_status: 'pending',
@@ -29,6 +31,16 @@ export default function DeliveryForm({ existing, drivers, onClose, onSaved }) {
   const [d1Other, setD1Other] = useState(false)
   const [d2Other, setD2Other] = useState(false)
   const initializedDelivery = useRef(undefined)
+  const [choices, setChoices] = useState(() => compileDeliveryChoices([]))
+  const [choiceError, setChoiceError] = useState('')
+  const [choicesLoading, setChoicesLoading] = useState(true)
+  useEffect(() => {
+    let active = true
+    loadDeliveryChoices(supabase).then(data => { if (active) setChoices(data) })
+      .catch(() => { if (active) setChoiceError('Saved choices could not load. You can still type entries and save the delivery.') })
+      .finally(() => { if (active) setChoicesLoading(false) })
+    return () => { active = false }
+  }, [])
 
   useEffect(() => {
     // Polling and window focus refresh the roster with a new array. Initialize
@@ -58,6 +70,7 @@ export default function DeliveryForm({ existing, drivers, onClose, onSaved }) {
   }
 
   async function save() {
+    if (busy) return
     if (!f.customer_name.trim()) { toast('Customer name is required'); return }
     if (d1Other && !f.driver1_name.trim()) { toast('Type the Driver 1 name'); return }
     if (d2Other && !f.driver2_name.trim()) { toast('Type the Driver 2 name'); return }
@@ -148,6 +161,12 @@ export default function DeliveryForm({ existing, drivers, onClose, onSaved }) {
     <label className="fld"><span>{label}</span>
       <input type={type} value={f[k]} onChange={set(k)} {...extra} /></label>
   )
+  const choice = (k, label, options, extra = {}) => <SavedChoice key={k} label={label} value={f[k]} options={options} {...extra}
+    onChange={value => setF(prev => ({ ...prev, [k]: value }))} />
+  const dealerRows = choices.dealer(f.dealership_name)?.rows || []
+  const makes = uniqueChoices([...choices.values('make'), ...choices.values('trade_make')])
+  const models = make => uniqueChoices([...choices.values('model', r => choiceKey(r.make) === choiceKey(make)), ...choices.values('trade_model', r => choiceKey(r.trade_make) === choiceKey(make))])
+  const years = uniqueChoices([...Array.from({length: 20}, (_, i) => String(new Date().getFullYear() + 1 - i)), ...choices.values('vyear'), ...choices.values('trade_year')])
   const area = (k, label) => (
     <label className="fld"><span>{label}</span>
       <textarea value={f[k]} onChange={set(k)} /></label>
@@ -155,6 +174,8 @@ export default function DeliveryForm({ existing, drivers, onClose, onSaved }) {
 
   return (
     <Modal wide title={existing ? 'Edit Delivery' : 'New Delivery'} onClose={onClose}>
+      <p className="meta">{choicesLoading ? 'Loading saved choices…' : 'Choose a saved value or Add new / type or edit. New entries are remembered when you save the delivery.'}</p>
+      {choiceError && <p className="error-banner" role="alert">{choiceError}</p>}
       {section('Deal & Customer')}
       {field('customer_name', 'Customer Name')}
       <div className="fg2">
@@ -195,32 +216,32 @@ export default function DeliveryForm({ existing, drivers, onClose, onSaved }) {
         {field('cust_window_start', 'Window Start', 'time')}
         {field('cust_window_end', 'Window End', 'time')}
       </div>
-      {field('cust_window_text', 'Or type it (if no exact window)', 'text', { placeholder: 'e.g. early afternoon' })}
+      {choice('cust_window_text', 'Or type it (if no exact window)', choices.values('cust_window_text'), { placeholder: 'e.g. early afternoon' })}
 
-      {field('return_plan', 'After this run / ride home', 'text', { placeholder: 'e.g. Next pickup at Bridgewater, then Uber home' })}
+      {choice('return_plan', 'After this run / ride home', choices.values('return_plan'), { placeholder: 'e.g. Next pickup at Bridgewater, then Uber home' })}
       {section('New Vehicle')}
       <div className="fg2">
-        {field('dealership_name', 'Dealership Name')}
-        {field('dealership_contact', 'Dealership Contact')}
+        <SavedChoice label="Dealership Name" value={f.dealership_name} options={choices.dealers.map(d => d.name)} onChange={name => setF(prev => selectDealer(prev, name, choices))} />
+        {choice('dealership_contact', 'Dealership Contact', dealerRows.map(r => r.dealership_contact))}
       </div>
-      {field('dealership_address', 'Dealer pickup address', 'text', { placeholder: 'Full address for driver navigation' })}
+      {choice('dealership_address', 'Dealer pickup address', dealerRows.map(r => r.dealership_address), { placeholder: 'Full address for driver navigation' })}
       <div className="fg2">
-        {field('dealership_phone', 'Salesman')}
+        {choice('dealership_phone', 'Salesman', choices.values('dealership_phone'))}
         {field('vin', 'VIN')}
       </div>
       <div className="fg2">
-        {field('vyear', 'Year')}
-        {field('make', 'Make')}
+        {choice('vyear', 'Year', years)}
+        {choice('make', 'Make', makes)}
       </div>
       <div className="fg2">
-        {field('model', 'Model')}
-        {field('color', 'Color')}
+        {choice('model', 'Model', models(f.make))}
+        {choice('color', 'Color', choices.values('color'))}
       </div>
       <div className="fg2">
         {field('monthly_payment', 'Monthly Payment')}
-        {field('miles_per_year', 'Miles Per Year')}
+        {choice('miles_per_year', 'Miles Per Year', [...choices.values('miles_per_year'), '7500', '10000', '12000', '15000'])}
       </div>
-      {field('contract_type', 'Type Of Contract')}
+      {choice('contract_type', 'Type Of Contract', [...choices.values('contract_type'), 'Lease', 'Finance', 'Cash'])}
 
       {section('Lease Return / Trade')}
       <label className="check" style={{ marginBottom: 10 }}>
@@ -233,14 +254,14 @@ export default function DeliveryForm({ existing, drivers, onClose, onSaved }) {
               <option value="trade">Trade</option>
               <option value="lease_return">Lease Return</option>
             </select></label>
-          <div className="fg2">{field('trade_year', 'Year')}{field('trade_make', 'Make')}</div>
-          <div className="fg2">{field('trade_model', 'Model')}{field('trade_vin', 'Trade / Lease Return VIN')}</div>
+          <div className="fg2">{choice('trade_year', 'Year', years)}{choice('trade_make', 'Make', makes)}</div>
+          <div className="fg2">{choice('trade_model', 'Model', models(f.trade_make))}{field('trade_vin', 'Trade / Lease Return VIN')}</div>
           <label className="fld"><span>Where does it go?</span>
             <select value={f.trade_destination} onChange={set('trade_destination')}>
               <option value="office">Back to Office</option>
               <option value="dealer">Dealer / other destination</option>
             </select></label>
-          {f.trade_destination === 'dealer' && field('trade_return_dealer', 'Return destination (name & full address)', 'text', { placeholder: 'e.g. Audi of Freehold' })}
+          {f.trade_destination === 'dealer' && choice('trade_return_dealer', 'Return destination (name & full address)', uniqueChoices([...choices.values('trade_return_dealer'), ...choices.dealers.flatMap(d => d.rows.filter(r => r.dealership_address).map(r => d.name + ' — ' + r.dealership_address))]), { placeholder: 'e.g. Audi of Freehold' })}
           {area('trade_notes', 'Additional Trade Notes')}
         </>
       )}
@@ -270,7 +291,7 @@ export default function DeliveryForm({ existing, drivers, onClose, onSaved }) {
       {['pending', 'not_required', 'e_contracts'].includes(f.paperwork_status || 'pending') ? <label className="fld"><span>Paperwork</span><select value={f.paperwork_status || 'pending'} onChange={set('paperwork_status')}><option value="pending">Original paperwork to return</option><option value="e_contracts">E-contracts · no paperwork to return</option><option value="not_required">No originals to return</option></select></label> : <p className="meta">Return already recorded: {f.paperwork_status}. See the closeout record.</p>}
       {section('Driver Pay')}
       <div className="fg2">
-        {field('pay_amount', 'Driver pay ($ per driver)', 'number')}
+        {choice('pay_amount', 'Driver pay ($ per driver)', [...choices.values('pay_amount'), '100'], { type: 'number' })}
         {field('pay_adjust', 'Bonus / Deduction (+/- $)', 'number')}
       </div>
       {Number(f.pay_adjust) !== 0 && area('pay_adjust_note', 'Reason for bonus/deduction')}
