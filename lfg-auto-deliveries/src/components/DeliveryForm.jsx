@@ -174,7 +174,7 @@ export default function DeliveryForm({ existing, drivers, onClose, onSaved }) {
 
   return (
     <Modal wide title={existing ? 'Edit Delivery' : 'New Delivery'} onClose={onClose}>
-      <p className="meta">{choicesLoading ? 'Loading saved choices…' : 'Choose a saved value or Add new / type or edit. New entries are remembered when you save the delivery.'}</p>
+      <p className="meta">{choicesLoading ? 'Loading saved choices…' : 'Type in any field or pick a saved choice below it. New entries are remembered when you save the delivery.'}</p>
       {choiceError && <p className="error-banner" role="alert">{choiceError}</p>}
       {section('Deal & Customer')}
       {field('customer_name', 'Customer Name')}
