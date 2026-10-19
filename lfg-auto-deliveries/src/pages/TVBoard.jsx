@@ -3,8 +3,8 @@ import { supabase } from '../lib/supabase'
 import { STATUS, fmtTime, fmtClock, custWindow, vehicleLabel } from '../lib/helpers'
 import { easternDay, driverNames, nextAction, PAPERWORK } from '../lib/workflow'
 import useRefresh from '../hooks/useRefresh'
+import { BOARD_FILTERS, isBoardDelivered, matchesBoardFilter } from '../lib/boardFilters'
 
-const BOARD_FILTERS = [['live', 'Live'], ['delivered', 'Delivered'], ['drafts', 'Drafts'], ['closeout', 'Closeout pending'], ['all', 'All']]
 function daysOfWeek(today) {
   const monday = new Date(today + 'T12:00:00Z')
   monday.setUTCDate(monday.getUTCDate() - (monday.getUTCDay() + 6) % 7)
@@ -14,7 +14,7 @@ function daysOfWeek(today) {
   })
 }
 const weeklyDate = d => d.delivery_date || (d.delivered_at ? easternDay(d.delivered_at) : '')
-const FILTER_KEY = 'lfg-tv-status-filter'
+const FILTER_KEY = 'lfg-tv-status-filter-v2'
 
 export default function TVBoard() {
   const [rows, setRows] = useState([])
@@ -22,7 +22,7 @@ export default function TVBoard() {
   const [range, setRange] = useState(() => { try { const saved = localStorage.getItem('lfg-tv-range'); return ['daily','weekly','monthly'].includes(saved) ? saved : 'weekly' } catch { return 'weekly' } })
   useEffect(() => { try { localStorage.setItem('lfg-tv-range', range) } catch {} }, [range])
   const [filter, setFilter] = useState(() => {
-    try { const saved = localStorage.getItem(FILTER_KEY); return BOARD_FILTERS.some(([v]) => v === saved) ? saved : 'live' } catch { return 'live' }
+    try { const saved = localStorage.getItem(FILTER_KEY); return BOARD_FILTERS.some(([v]) => v === saved) ? saved : 'scheduled' } catch { return 'scheduled' }
   })
   useEffect(() => { try { localStorage.setItem(FILTER_KEY, filter) } catch {} }, [filter])
   const [page, setPage] = useState(0)
@@ -44,11 +44,7 @@ export default function TVBoard() {
   const weekDays = daysOfWeek(today)
   const weekStart = weekDays[0].date, weekEnd = weekDays[4].date
   const board = rows.filter(d => {
-    const delivered = !!d.delivered_at || d.status === 'delivered' || !!d.archived
-    if (filter === 'live' && (!d.is_ready || delivered)) return false
-    if (filter === 'delivered' && !delivered) return false
-    if (filter === 'drafts' && (d.is_ready || delivered)) return false
-    if (filter === 'closeout' && !d.closeout_required) return false
+    if (!matchesBoardFilter(d, filter)) return false
     if (d.closeout_required) return true
     const date = d.delivered_at ? easternDay(d.delivered_at) : d.delivery_date
     if (range === 'monthly') return date?.slice(0,7) === today.slice(0,7)
@@ -72,7 +68,7 @@ export default function TVBoard() {
     <div className="row" role="group" aria-label="Delivery status filter" style={{ flexWrap: 'wrap', gap: 8, marginBottom: 16 }}>
       {BOARD_FILTERS.map(([value, label]) => <button key={value} type="button" aria-pressed={filter === value} className={'btn sm ' + (filter === value ? 'gold' : 'ghost')} onClick={() => setFilter(value)}>{label}</button>)}
     </div>
-    <div className="tv-totals"><span><b>{board.length}</b> Jobs</span><span><b>{board.filter(d => !!d.delivered_at).length}</b> Delivered</span><span><b>{issues.length}</b> Issues</span><span><b>{closeout.length}</b> Closeout pending</span></div>
+    <div className="tv-totals"><span><b>{board.length}</b> Jobs</span><span><b>{board.filter(d => d.is_ready && !isBoardDelivered(d)).length}</b> Live</span><span><b>{board.filter(d => !d.is_ready && !isBoardDelivered(d)).length}</b> Drafts</span><span><b>{board.filter(isBoardDelivered).length}</b> Delivered</span><span><b>{issues.length}</b> Issues</span><span><b>{closeout.length}</b> Closeout pending</span></div>
     {(error || stale) && <div className="error-banner" role="alert">{error || (updated ? 'Updates are stale · check connection' : 'Loading delivery board…')}</div>}
     {!!issues.length && <div className="attention-banner"><strong>Needs attention</strong><span>{issues.map(d => driverNames(d).join(' & ') || 'Unassigned').join(' · ')} · Dispatch: Jess</span></div>}
     {range === 'weekly' ? <>
@@ -92,5 +88,8 @@ export default function TVBoard() {
 }
 
 function RunCard({ d, range }) {
-  return <article className="tv-run"  style={{ borderLeftColor: STATUS[d.status]?.color || '#888' }}><div className="row spread"><h2>{driverNames(d).join(' & ') || 'UNASSIGNED'}</h2><span className="tv-status">{d.is_ready || d.delivered_at ? STATUS[d.status]?.label : 'Draft'}</span></div><h3>{d.customer_name?.split(' ')[0] || 'Customer'} · {vehicleLabel(d)}</h3><p>{d.dealership_name || 'Pickup dealer needed'}</p><div className="tv-times"><span>Dealer by <b>{fmtClock(d.dealer_by_time) || '—'}</b></span><span>Customer <b>{custWindow(d) || '—'}</b></span></div><div className="tv-next"><span>NEXT ACTION</span><strong>{d.is_ready || d.delivered_at ? nextAction(d) : 'Jess to publish delivery'}</strong></div>{d.delivered_at && <p>{PAPERWORK[d.paperwork_status] || 'Legacy delivery record'}</p>}{range !== 'daily' && <p>{d.delivery_date}</p>}</article>
+  const delivered = isBoardDelivered(d)
+  const draft = !d.is_ready && !delivered
+  const stage = delivered ? 'delivered' : draft ? 'draft' : 'live'
+  return <article className={'tv-run tv-run--' + stage} style={{ borderLeftColor: draft ? '#777d87' : STATUS[d.status]?.color || '#888' }}><div className="tv-stage-row"><span className={'tv-stage tv-stage--' + stage}>{stage.toUpperCase()}</span></div><div className="row spread"><h2>{driverNames(d).join(' & ') || 'UNASSIGNED'}</h2><span className="tv-status">{draft ? 'Not published' : STATUS[d.status]?.label || 'Delivered'}</span></div><h3>{d.customer_name?.split(' ')[0] || 'Customer'} · {vehicleLabel(d)}</h3><p>{d.dealership_name || 'Pickup dealer needed'}</p><div className="tv-times"><span>Dealer by <b>{fmtClock(d.dealer_by_time) || '—'}</b></span><span>Customer <b>{custWindow(d) || '—'}</b></span></div><div className="tv-next"><span>NEXT ACTION</span><strong>{d.is_ready || d.delivered_at ? nextAction(d) : 'Jess to publish delivery'}</strong></div>{d.delivered_at && <p>{PAPERWORK[d.paperwork_status] || 'Legacy delivery record'}</p>}{range !== 'daily' && <p>{d.delivery_date}</p>}</article>
 }
