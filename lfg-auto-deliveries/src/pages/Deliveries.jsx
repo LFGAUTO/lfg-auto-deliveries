@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 import { useToast } from '../components/Toast'
@@ -20,6 +20,16 @@ export default function Deliveries() {
   const [publishing, setPublishing] = useState(null)
   const [editing, setEditing] = useState(null)
   const [showForm, setShowForm] = useState(false)
+  const [linkedId] = useState(() => new URLSearchParams(window.location.search).get('delivery'))
+  const handledLink = useRef(null)
+  useEffect(() => {
+    const id = linkedId
+    if (loading || loadError || !id || handledLink.current === id) return
+    handledLink.current = id
+    const delivery = deliveries.find(d => d.id === id)
+    if (delivery) { setEditing(delivery); setShowForm(true) }
+    else toast('Delivery is not in the active list. Check Archive if it has completed.')
+  }, [linkedId, deliveries, loading, loadError])
 
   async function load() {
     const { data, error } = await supabase.from('deliveries')

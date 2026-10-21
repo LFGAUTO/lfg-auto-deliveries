@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from 'react'
+import { useEffect, useState, useMemo, useRef } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 import { useToast } from '../components/Toast'
@@ -16,6 +16,16 @@ export default function Archive() {
   const [rows, setRows] = useState([])
   const [q, setQ] = useState('')
   const [view, setView] = useState(null)
+  const [linkedId] = useState(() => new URLSearchParams(window.location.search).get('delivery'))
+  const handledLink = useRef(null)
+  useEffect(() => {
+    const id = linkedId
+    if (loading || error || !id || handledLink.current === id) return
+    handledLink.current = id
+    const delivery = rows.find(d => d.id === id)
+    if (delivery) setView(delivery)
+    else toast('Archived delivery not found. Check active deliveries if it was reopened.')
+  }, [linkedId, rows, loading, error])
 
   async function load() {
     const { data, error } = await supabase.from('deliveries')
@@ -103,7 +113,7 @@ export default function Archive() {
           <Field label="Phone" value={view.customer_phone} />
           <Field label="Address" value={view.delivery_address} />
           <Field label="Driver" value={[view.driver1_name, view.driver2_name].filter(Boolean).join(' & ')} />
-          <DeliveryDrivers key={view.id} delivery={view} onSaved={load} />
+          <DeliveryDrivers key={"drivers-" + view.id} delivery={view} onSaved={load} />
 
           <div className="section-title">Timestamps</div>
           <Field label="At Dealer" value={fmtDateTime(view.at_dealer_at)} />
@@ -136,7 +146,7 @@ export default function Archive() {
           <Field label="Contract Photo Taken" value={view.task_photo_contract ? 'Yes' : 'No'} />
 
           <Closeout delivery={view} onSaved={load} />
-          <DeliveryPay key={view.id} delivery={view} onSaved={load} />
+          <DeliveryPay key={"pay-" + view.id} delivery={view} onSaved={load} />
           <div className="section-title">Sign-Off</div>
           {view.driver_signature && <img src={view.driver_signature} alt="signature" style={{ background: '#fff', borderRadius: 10, maxWidth: 260, marginTop: 6 }} />}
           <div className="row" style={{ marginTop: 10 }}>
