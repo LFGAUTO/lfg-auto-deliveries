@@ -1,4 +1,5 @@
 import { createClient } from 'npm:@supabase/supabase-js@2.45.4';
+import {adminQuery,adminPush,adminFunction} from './admin.js';
 import { cleanDraft, isDraftEditable, deliveryMatches } from './model.js';
 
 const PUBLIC_KEY = 'MCowBQYDK2VwAyEAUokmNamHmMPpmZ59chU1FWcUZljoMkbp1a965nga9MY=';
@@ -24,6 +25,11 @@ Deno.serve(async req => {
     const body=JSON.parse(raw);
     if(typeof body.timestamp!=='number' || Math.abs(Date.now()-body.timestamp)>60000)return json({error:'Request expired. Please retry.'},401);
     const {action,leadId,payload={},customer={}}=body;
+    if(['adminQuery','adminPush','adminFunction'].includes(action)){
+      if(!body.actor?.name || !['shared','mike','patrick','jess'].includes(body.actor.username))return json({error:'Administrator identity required.'},403);
+      try {return json(action==='adminQuery'?await adminQuery(db,payload,body.actor):action==='adminPush'?await adminPush(db,payload):await adminFunction(db,payload,body.actor));}
+      catch(error){return json({error:error.message||'Delivery operation failed.'},400);}
+    }
     if(!uuid(leadId) || !['inspect','status','create','link','saveDraft'].includes(action))return json({error:'Invalid request.'},400);
     const {data:linked,error:readError}=await db.from('deliveries').select('*').eq('landing_lead_id',leadId).maybeSingle();
     if(readError)throw readError;
