@@ -31,7 +31,7 @@ Deno.serve(async req => {
     if(action==='inspect') {
       const [history,roster,candidateRows]=await Promise.all([allRows(CHOICES),db.from('drivers_roster').select('name').order('name'),linked?Promise.resolve([]):allRows(SUMMARY+',created_at')]);
       if(roster.error)throw roster.error;
-      return json({delivery:linked,choices:history,drivers:(roster.data||[]).map(d=>d.name),candidates:candidateRows.filter(d=>!d.landing_lead_id&&deliveryMatches(d,customer)).slice(0,20)});
+      return json({delivery:linked,available:candidateRows.filter(d=>!d.landing_lead_id),choices:history,drivers:(roster.data||[]).map(d=>d.name),candidates:candidateRows.filter(d=>!d.landing_lead_id&&deliveryMatches(d,customer)).slice(0,20)});
     }
     if(action==='create') {
       if(linked)return json({delivery:linked,alreadyLinked:true});
