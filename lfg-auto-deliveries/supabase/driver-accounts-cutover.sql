@@ -1,0 +1,22 @@
+begin;
+do $$begin
+ if (select count(*) from delivery_private.driver_accounts a join public.profiles p on p.id=a.user_id and p.driver_roster_id=a.roster_id where p.status='active')<>3 then raise exception 'Provision the three approved driver accounts before cutover';end if;
+end $$;
+drop policy if exists deliveries_driver_read on public.deliveries;
+drop policy if exists deliveries_driver_update on public.deliveries;
+drop policy if exists payroll_read on public.payroll_paid;
+create policy payroll_read on public.payroll_paid for select to authenticated using(public.is_admin());
+drop policy if exists issues_admin_read on public.issues;
+create policy issues_admin_read on public.issues for select to authenticated using(public.is_admin());
+drop policy if exists issues_insert on public.issues;
+create policy issues_insert on public.issues for insert to authenticated with check(public.is_admin());
+drop policy if exists activity_insert on public.activity_log;
+create policy activity_insert on public.activity_log for insert to authenticated with check(public.is_admin());
+update public.delivery_push_devices d set owner_id=a.user_id,updated_at=now() from delivery_private.driver_accounts a join public.drivers_roster r on r.id=a.roster_id where d.driver_name=r.name and a.user_id is not null;
+update public.delivery_push_devices set active=false,updated_at=now() where owner_id='c7045276-6b07-4637-85fc-ac8e353113a2';
+update public.profiles set status='inactive' where id='c7045276-6b07-4637-85fc-ac8e353113a2';
+delete from auth.sessions where user_id='c7045276-6b07-4637-85fc-ac8e353113a2';
+delete from auth.refresh_tokens where user_id='c7045276-6b07-4637-85fc-ac8e353113a2';
+drop policy if exists photos_auth_write on storage.objects;
+create policy photos_auth_write on storage.objects for insert to authenticated with check(bucket_id='delivery-photos' and (public.is_admin() or (public.is_driver() and exists(select 1 from public.profiles where id=auth.uid() and driver_roster_id is not null))));
+commit;

@@ -12,4 +12,5 @@ export const supabase = createClient(url || 'http://localhost', anon || 'public-
 
 // We log people in with a username; Supabase needs an email, so we map them.
 export const EMAIL_DOMAIN = 'lfgauto.app'
-export const usernameToEmail = (username) => `${String(username).trim().toLowerCase()}@${EMAIL_DOMAIN}`
+export const usernameToEmail = (username) => String(username).trim().includes('@') ? String(username).trim().toLowerCase() : `${String(username).trim().toLowerCase()}@${EMAIL_DOMAIN}`
+

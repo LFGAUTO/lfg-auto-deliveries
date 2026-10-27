@@ -23,7 +23,7 @@ test('arrival guides name selection, reports rejected saves, and updates before 
  b.onResolve({filter:/components\/Toast$/},()=>({path:'toast',namespace:'mock'}))
  b.onResolve({filter:/hooks\/useRefresh$/},()=>({path:'refresh',namespace:'mock'}))
  b.onResolve({filter:/components\/PushAlerts$/},()=>({path:'push',namespace:'mock'}))
- b.onLoad({filter:/.*/,namespace:'mock'},a=>({contents:a.path==='db'?db:a.path==='auth'?`export const useAuth=()=>({profile:{id:'driver'},userName:'driver',signOut(){}})`:a.path==='toast'?`export const useToast=()=>()=>{}`:a.path==='push'?`export const PhoneAlerts=()=>null;export const DriverAcknowledgment=()=>null`:`import {useEffect} from 'react';export default function useRefresh(fn){useEffect(()=>{fn()},[])}`,loader:'js'}))
+ b.onLoad({filter:/.*/,namespace:'mock'},a=>({contents:a.path==='db'?db:a.path==='auth'?`export const useAuth=()=>({profile:{id:'driver'},userName:'driver',isAdmin:true,signOut(){}})`:a.path==='toast'?`export const useToast=()=>()=>{}`:a.path==='push'?`export const PhoneAlerts=()=>null;export const DriverAcknowledgment=()=>null`:`import {useEffect} from 'react';export default function useRefresh(fn){useEffect(()=>{fn()},[])}`,loader:'js'}))
  }}]})
  const file=path.join(dir,'arrival.mjs');await writeFile(file,bundle.outputFiles[0].text)
  const {default:Driver}=await import(pathToFileURL(file));const root=createRoot(document.getElementById('root'))
@@ -50,3 +50,4 @@ test('arrival guides name selection, reports rejected saves, and updates before 
  assert.equal(document.querySelector('[role="alert"]'),null)
  }finally{await act(async()=>root.unmount());await rm(dir,{recursive:true,force:true});dom.window.close()}
 })
+

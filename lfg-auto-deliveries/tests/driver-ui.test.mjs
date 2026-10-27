@@ -29,7 +29,7 @@ test('driver handoff preserves its draft on failure and dispatch calls Jess', as
     b.onResolve({filter:/components\/Toast$/},()=>({path:'toast',namespace:'mock'}))
     b.onResolve({filter:/components\/SignaturePad$/},()=>({path:'signature',namespace:'mock'}))
     b.onResolve({filter:/hooks\/useRefresh$/},()=>({path:'refresh',namespace:'mock'}))
-    b.onLoad({filter:/.*/,namespace:'mock'},a=>({contents:a.path==='db'?mockDB:a.path==='auth'?`export const useAuth=()=>({profile:{id:'u'},userName:'driver',isAdmin:false,signOut:()=>{}})`:a.path==='toast'?`export const useToast=()=>message=>globalThis.fixture.messages.push(message)`:a.path==='refresh'?`import {useEffect} from 'react'; export default function useRefresh(load){useEffect(()=>{load()},[])}`:`export default function SignaturePad(){return null}`,loader:'js'}))
+    b.onLoad({filter:/.*/,namespace:'mock'},a=>({contents:a.path==='db'?mockDB:a.path==='auth'?`export const useAuth=()=>({profile:{id:'u'},userName:'driver',isAdmin:true,signOut:()=>{}})`:a.path==='toast'?`export const useToast=()=>message=>globalThis.fixture.messages.push(message)`:a.path==='refresh'?`import {useEffect} from 'react'; export default function useRefresh(load){useEffect(()=>{load()},[])}`:`export default function SignaturePad(){return null}`,loader:'js'}))
   }}] })
   const file = path.join(dir,'driver.mjs'); await writeFile(file,bundle.outputFiles[0].text)
   const {default:Driver} = await import(pathToFileURL(file))
@@ -60,3 +60,4 @@ test('driver handoff preserves its draft on failure and dispatch calls Jess', as
     assert.equal(patch.completed_by_name,'Mike')
   } finally { await act(async()=>root.unmount()); dom.window.close(); await rm(dir,{recursive:true,force:true}); delete globalThis.fixture }
 })
+

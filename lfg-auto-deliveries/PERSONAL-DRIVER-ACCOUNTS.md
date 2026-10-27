@@ -1,0 +1,13 @@
+# Personal driver accounts
+
+The driver app now uses verified personal Supabase Auth accounts linked to immutable roster IDs. Bobby Fonz, Stingray Mike and Dougy Fresh have approved email mappings in a private RLS-protected table. Paul and other roster names remain assignable without logins.
+
+Drivers read/update deliveries only through driver_portal, which checks auth.uid(), active profile status and the server-owned account-to-roster mapping on every request. It returns assigned live deliveries/open closeout work without pay columns. Driver payroll is a separate server-calculated own-account total for the existing Saturday–Friday payroll week in America/New_York. Shared jobs count once for each assigned driver. Drivers cannot select an arbitrary payroll identity, edit pay/assignments, read raw delivery/payroll tables, or bypass ownership using deep links. Existing admin and central admin bridge access is unchanged.
+
+Driver updates preserve existing handoff/closeout triggers. Mutation fields are allowlisted; actor names come from the account. New-user profiles never trust user metadata for privileges. Public signups remain inactive unless approved. Functions have explicit execution grants and empty search_path; the authenticated security-definer API is intentionally exposed with mandatory identity checks. Private tables have RLS/no client policies and are intentionally unavailable to client roles.
+
+Push registrations are constrained to the driver's roster identity. Existing subscriptions and opaque phone tokens are retained and ownership transfers by exact roster name at cutover. Unmatched shared-account subscriptions are disabled. No payroll records, customer photos, delivery links or assignments are rewritten. Users can re-enable alerts on their own Home Screen app if needed.
+
+Deployment order: additive driver-accounts.sql, frontend, protected one-time provisioning (generateLink, no automatic mail), cutover policy restrictions + shared account/session retirement, push function update. Password setup links use a URL fragment and verifyOtp; tokens never enter HTTP query logs. Invite links are sent individually to the exact user-approved addresses. Test fixtures use transaction rollback; no fixture customers persist.
+
+Verification includes SQL tests of two isolated driver identities, a shared job, independent pay totals, raw-table denial, forbidden pay updates, cross-driver write denial, arrival persistence and unchanged admin access. Mounted UI tests cover ignoring stale local driver preferences and other-driver deep links, fixed push identity and personal RPC access. Existing workflow/payroll/push/auth tests are retained.

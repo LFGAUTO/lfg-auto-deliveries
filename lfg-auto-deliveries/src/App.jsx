@@ -1,3 +1,5 @@
+import {useState} from 'react'
+import SetPassword from './pages/SetPassword'
 import { Routes, Route, Navigate } from 'react-router-dom'
 import { useAuth } from './context/AuthContext'
 import Layout from './components/Layout'
@@ -15,9 +17,11 @@ function Splash({ text = 'Loading…' }) {
 }
 
 export default function App() {
-  const { session, profile, loading, isAdmin, isDriver } = useAuth()
+  const { session, profile, loading, isAdmin, isDriver, signOut } = useAuth()
+  const [passwordSetup,setPasswordSetup]=useState(window.location.pathname==='/set-password'||/type=(invite|recovery)/.test(window.location.hash))
 
   if (loading) return <Splash />
+  if(passwordSetup)return <SetPassword session={session} onDone={()=>setPasswordSetup(false)}/>
   if (!session) {
     return (
       <Routes>
@@ -28,10 +32,12 @@ export default function App() {
   // Signed in but profile row not ready yet
   if (!profile) return <Splash text="Setting up your account…" />
 
+  if(profile.status!=='active')return <div className="login"><div className="card"><h1>Use your personal driver login</h1><p>The shared driver login has been retired. Sign in with your own email and password.</p><button className="btn gold" onClick={signOut}>Sign out</button></div></div>
+
   // TV board is shared (no chrome). Available to any signed-in user.
   return (
     <Routes>
-      <Route path="/board" element={<TVBoard />} />
+      {isAdmin && <Route path="/board" element={<TVBoard />} />}
 
       {isAdmin && (
         <Route element={<Layout />}>
@@ -49,3 +55,4 @@ export default function App() {
     </Routes>
   )
 }
+

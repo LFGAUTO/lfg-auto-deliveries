@@ -1,3 +1,4 @@
+import { driverData, driverRequest } from '../lib/driverData'
 import { payrollSettlement } from '../lib/payroll'
 import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
@@ -23,7 +24,8 @@ async function uploadPhoto(file, prefix) {
 }
 
 export default function DriverPortal() {
-  const { profile, userName, signOut } = useAuth()
+  const { profile, userName, signOut, isAdmin, driverName } = useAuth()
+  const db = isAdmin ? supabase : driverData
   const toast = useToast()
   const [rows, setRows] = useState([])
   const [alertPhone, setAlertPhone] = useState(null)
@@ -39,18 +41,18 @@ export default function DriverPortal() {
   const [loadError, setLoadError] = useState('')
   const [busyId, setBusyId] = useState(null)
   const [statusError, setStatusError] = useState(null)
-  const actor = pick !== 'all' && pick !== '__un__' ? pick : null
+  const actor = isAdmin ? (pick !== 'all' && pick !== '__un__' ? pick : null) : driverName
   useEffect(() => { localStorage.setItem('lfg-driver-name', pick) }, [pick])
   const [deliverFor, setDeliverFor] = useState(null)
   const [issueFor, setIssueFor] = useState(null)
 
   async function load() {
-    const { data, error } = await supabase.from('deliveries')
+    const { data, error } = await db.from('deliveries')
       .select('*').or('archived.eq.false,closeout_required.eq.true')
       .order('delivery_date', { ascending: true })
     if (error) { setLoadError('Could not load deliveries. Check your connection or contact Jess.'); setLoading(false); return }
     setLoadError(''); setLoading(false); setRows(data || [])
-    const { data: drv } = await supabase.from('drivers_roster').select('*').order('name')
+    const { data: drv } = await db.from('drivers_roster').select('*').order('name')
     setDrivers(drv || [])
   }
   useRefresh(load)
@@ -58,13 +60,19 @@ export default function DriverPortal() {
   // This driver's own pay total for the current Sat–Fri week
   const [payInfo, setPayInfo] = useState(null)
   useEffect(() => {
-    const realName = (pick !== 'all' && pick !== '__un__') ? pick : null
+    const realName = actor
     if (!realName) { setPayInfo(null); return }
+    let current = true
     ;(async () => {
+      if(!isAdmin){
+        const {data:r,error}=await driverRequest({action:'payroll'})
+        if(current && !error && r){const payment=payrollSettlement(r.payment,r.total,r.count);setPayInfo({total:r.total,count:r.count,paid:payment.settled,changed:payment.changed,balance:payment.balance,label:r.label})}
+        return
+      }
       const n = new Date(); const back = (n.getDay() + 1) % 7
       const start = new Date(n); start.setDate(n.getDate() - back); start.setHours(0, 0, 0, 0)
       const end = new Date(start); end.setDate(start.getDate() + 6); end.setHours(23, 59, 59, 999)
-      const { data } = await supabase.from('deliveries')
+      const { data } = await db.from('deliveries')
         .select('pay_amount,pay_adjust,pay_exclude,driver1_name,driver2_name,delivered_at')
         .gte('delivered_at', start.toISOString()).lte('delivered_at', end.toISOString())
       let total = 0, count = 0
@@ -74,15 +82,16 @@ export default function DriverPortal() {
           total += Number(d.pay_amount ?? 100) + Number(d.pay_adjust || 0); count++
         }
       })
-      const { data: pd } = await supabase.from('payroll_paid').select('driver_name,amount,deliveries')
+      const { data: pd } = await db.from('payroll_paid').select('driver_name,amount,deliveries')
         .eq('driver_name', realName).eq('week_start', start.toISOString().slice(0, 10))
       const payment = payrollSettlement(pd?.[0], total, count)
       setPayInfo({ total, count, paid: payment.settled, changed: payment.changed, balance: payment.balance, label: `${start.toLocaleDateString()} – ${end.toLocaleDateString()}` })
     })()
-  }, [pick, rows])
+    return () => { current=false }
+  }, [actor, isAdmin, rows])
 
   async function logActivity(deliveryId, action) {
-    await supabase.from('activity_log').insert({ delivery_id: deliveryId, user_id: profile.id, user_name: actor || userName, action })
+    await db.from('activity_log').insert({ delivery_id: deliveryId, user_id: profile.id, user_name: actor || userName, action })
   }
 
   const STATUS_LABEL = { assigned: 'Assigned', at_dealer: 'At Dealer', en_route: 'En Route', delivered: 'Delivered', issue: 'Issue' }
@@ -97,7 +106,7 @@ export default function DriverPortal() {
     if (stampField) patch[stampField] = new Date().toISOString()
     setBusyId(d.id)
     try {
-      const { data, error } = await supabase.from('deliveries').update(patch)
+      const { data, error } = await db.from('deliveries').update(patch)
         .eq('id', d.id).eq('status', d.status).select('*').single()
       if (error || !data) throw new Error(error?.message || 'Delivery changed. Refresh and try again.')
       // Reflect the confirmed save before any secondary activity-log request.
@@ -122,15 +131,15 @@ export default function DriverPortal() {
       </div>
 
       <div className="content">
-        <div className="page-heading"><div><div className="eyebrow">LFG driver operations</div><h1 className="h1">{actor ? `Your day, ${actor}.` : 'Your delivery day.'}</h1><p className="sub">Choose your name to record updates. Use controls only while parked.</p></div><a className="btn ghost sm" href={`tel:${DISPATCH_PHONE}`}>Contact dispatch · Jess</a></div>
-        <label className="fld driver-picker"><span>Driver</span><select value={pick} onChange={e => setPick(e.target.value)}><option value="all">All drivers · view only</option>{drivers.map(dr => <option key={dr.id} value={dr.name}>{dr.name}</option>)}<option value="__un__">Unassigned · view only</option></select></label>
-        {!actor && <p className="meta" role="status">Choose your name above to update a delivery. All drivers is a view-only list.</p>}
-        <PhoneAlerts drivers={drivers} onPhone={name => { setAlertPhone(name); setPick(current => linkedDelivery || current === 'all' ? name : current) }} />
+        <div className="page-heading"><div><div className="eyebrow">LFG driver operations</div><h1 className="h1">{actor ? `Your day, ${actor}.` : 'Your delivery day.'}</h1><p className="sub">{isAdmin ? "Choose a driver to preview their deliveries." : "Your assigned deliveries and personal pay. Use controls only while parked."}</p></div><a className="btn ghost sm" href={`tel:${DISPATCH_PHONE}`}>Contact dispatch · Jess</a></div>
+        {isAdmin && <label className="fld driver-picker"><span>Driver</span><select value={pick} onChange={e => setPick(e.target.value)}><option value="all">All drivers · view only</option>{drivers.map(dr => <option key={dr.id} value={dr.name}>{dr.name}</option>)}<option value="__un__">Unassigned · view only</option></select></label>}
+        {isAdmin && !actor && <p className="meta" role="status">Choose your name above to update a delivery. All drivers is a view-only list.</p>}
+        <PhoneAlerts fixedDriver={isAdmin ? null : driverName} drivers={drivers} onPhone={name => { setAlertPhone(name); isAdmin && setPick(current => linkedDelivery || current === 'all' ? name : current) }} />
         {payInfo && <div className="earnings-bar"><div><strong>${payInfo.total.toFixed(2)} this week</strong><p className="meta">{payInfo.count} deliveries · {payInfo.label}</p></div><span>{payInfo.paid ? 'Paid' : payInfo.changed ? (payInfo.balance > 0 ? `$${payInfo.balance.toFixed(2)} pending` : 'Pay adjustment under review') : 'Pending'}</span></div>}
         {loading && <p role="status">Loading deliveries…</p>}
         {loadError && <div className="error-banner" role="alert">{loadError}<button className="btn ghost sm" onClick={load}>Retry</button></div>}
         {(() => {
-          const shown = rows.filter(d => (d.is_ready || d.closeout_required) && (d.id === linkedDelivery || pick === 'all' || (pick === '__un__' ? !driverNames(d).length : driverNames(d).includes(pick))))
+          const shown = rows.filter(d => (d.is_ready || d.closeout_required) && (isAdmin ? (d.id === linkedDelivery || pick === 'all' || (pick === '__un__' ? !driverNames(d).length : driverNames(d).includes(pick))) : driverNames(d).includes(actor)))
           return <>{!loading && !loadError && !shown.length && <div className="empty-state">You’re all caught up. New live deliveries appear here automatically.</div>}
           {['Overdue', 'Today', 'Upcoming', 'Date needed', 'Finish your returns'].map(group => {
             const jobs = shown.filter(d => dateGroup(d) === group)
@@ -160,7 +169,7 @@ export default function DriverPortal() {
 
       {deliverFor && <DeliverModal d={deliverFor} onClose={() => setDeliverFor(null)}
         onDone={async (patch) => {
-          const { error } = await supabase.from('deliveries').update({
+          const { error } = await db.from('deliveries').update({
             ...patch, status: 'delivered', delivered_at: new Date().toISOString(), archived: true, closeout_required: true, completed_by_name: actor,
           }).eq('id', deliverFor.id)
           if (error) { toast('Error: ' + error.message); return false }
@@ -170,11 +179,11 @@ export default function DriverPortal() {
 
       {issueFor && <IssueModal d={issueFor} onClose={() => setIssueFor(null)}
         onDone={async ({ type, note, photo_url }) => {
-          const { error: issueError } = await supabase.from('issues').insert({ delivery_id: issueFor.id, type, note, photo_url, created_by: profile.id, created_by_name: actor || userName })
+          const { error: issueError } = await db.from('issues').insert({ delivery_id: issueFor.id, type, note, photo_url, created_by: profile.id, created_by_name: actor || userName })
           if (issueError) { toast('Issue could not be saved'); return }
           const patch = issueFor.delivered_at ? {} : { status: 'issue' }
           if (issueFor.status !== 'issue') patch.prev_status = issueFor.status
-          if (!issueFor.delivered_at) await supabase.from('deliveries').update(patch).eq('id', issueFor.id)
+          if (!issueFor.delivered_at) await db.from('deliveries').update(patch).eq('id', issueFor.id)
           await logActivity(issueFor.id, `reported an issue on ${issueFor.customer_name}: ${type}`)
           toast('Issue reported'); setIssueFor(null); load()
         }} />}
@@ -362,3 +371,4 @@ function IssueModal({ d, onClose, onDone }) {
     </Modal>
   )
 }
+

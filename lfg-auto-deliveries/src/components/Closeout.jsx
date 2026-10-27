@@ -1,3 +1,4 @@
+import { driverData } from '../lib/driverData'
 import { useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
@@ -8,6 +9,7 @@ import { fmtDateTime } from '../lib/helpers'
 export default function Closeout({ delivery: d, actor, onSaved, readOnly = false }) {
   const { profile, userName, isAdmin } = useAuth()
   const toast = useToast()
+  const db = isAdmin ? supabase : driverData
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   async function save(patch, action) {
@@ -16,11 +18,11 @@ export default function Closeout({ delivery: d, actor, onSaved, readOnly = false
     setBusy(true); setError('')
     try {
       const name = actor || userName
-      const { data, error } = await supabase.from('deliveries').update(patch).eq('id', d.id).select('*').single()
+      const { data, error } = await db.from('deliveries').update(patch).eq('id', d.id).select('*').single()
       if (error || !data) throw error || new Error('No delivery updated')
       toast(data.closeout_required ? 'Saved. Finish the remaining tasks below.' : 'Run complete · saved to Archive')
       await onSaved?.()
-      void supabase.from('activity_log').insert({ delivery_id: d.id, user_id: profile.id, user_name: name, action: `${action} for ${d.customer_name}` }).then(() => {}, () => {})
+      void db.from('activity_log').insert({ delivery_id: d.id, user_id: profile.id, user_name: name, action: `${action} for ${d.customer_name}` }).then(() => {}, () => {})
     } catch (e) { setError('Could not save: ' + e.message) } finally { setBusy(false) }
   }
   function paperwork(status) {
@@ -51,3 +53,4 @@ export default function Closeout({ delivery: d, actor, onSaved, readOnly = false
     {d.closeout_completed_at && <p className="meta">Run closed {fmtDateTime(d.closeout_completed_at)}</p>}
   </section>
 }
+

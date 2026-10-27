@@ -4,8 +4,7 @@ import { useToast } from '../components/Toast'
 import Modal from '../components/Modal'
 import { PhoneAlerts } from '../components/PushAlerts'
 
-// Drivers share ONE login. This page just manages the list of NAMES used
-// when assigning deliveries. The signature captured at delivery shows who did it.
+// Roster assignments remain attached to their existing names and payroll history.
 export default function Drivers() {
   const toast = useToast()
   const [roster, setRoster] = useState([])
@@ -34,29 +33,12 @@ export default function Drivers() {
     toast('Removed from roster'); load()
   }
 
-  async function resetDriverPw() {
-    const password = prompt('New password for the shared driver login:')
-    if (password === null) return
-    if (password.trim().length < 6) { toast('Use at least 6 characters'); return }
-    const { data, error } = await supabase.functions.invoke('reset-driver-password', { body: { password: password.trim() } })
-    if (error || data?.error) { toast('Error: ' + (data?.error || error.message)); return }
-    toast('Driver password updated')
-  }
-
   return (
     <>
       <div className="h1">Drivers</div>
       <div className="sub">Driver roster — names used when assigning deliveries</div>
 
-      <div className="card" style={{ borderColor: '#1d6bb6', background: 'rgba(29,107,182,.10)', marginBottom: 14 }}>
-        <strong className="gold">Shared driver login</strong>
-        <div className="meta" style={{ color: '#cfe2f2', marginTop: 4 }}>
-          All drivers use one login (set it up once in Supabase — see the README). Because each driver signs at delivery,
-          the signature on the record shows who actually completed it.
-        </div>
-        <button className="btn ghost sm" style={{ marginTop: 10 }} onClick={resetDriverPw}>Reset Driver Password</button>
-      </div>
-
+      <div className="card" style={{marginBottom:14}}><strong className="gold">Personal driver logins</strong><p className="meta">Each driver signs in with their own email. Drivers see only their assignments and personal pay. Password setup and resets are on the driver sign-in page.</p></div>
       <PhoneAlerts drivers={roster} onPhone={() => {}} />
       <button className="btn gold" onClick={() => setShowNew(true)}>+ Add Driver to Roster</button>
       <div style={{ height: 14 }} />
@@ -87,3 +69,4 @@ export default function Drivers() {
     </>
   )
 }
+

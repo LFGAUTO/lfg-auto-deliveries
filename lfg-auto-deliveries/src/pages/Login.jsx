@@ -6,6 +6,8 @@ export default function Login() {
   const [password, setPassword] = useState('')
   const [err, setErr] = useState('')
   const [busy, setBusy] = useState(false)
+  const [message,setMessage]=useState('')
+  async function reset(){setBusy(true);setErr('');const {error}=await supabase.auth.resetPasswordForEmail(usernameToEmail(username),{redirectTo:window.location.origin+'/set-password'});setBusy(false);if(error)setErr(error.message);else setMessage('If this email has an account, a password setup link is on its way.');}
 
   async function submit(e) {
     e.preventDefault()
@@ -29,15 +31,18 @@ export default function Login() {
         <h1>LFG AUTO <span className="gold">DELIVERIES</span></h1>
         <div className="sub">Sign in to continue</div>
         <form onSubmit={submit}>
-          <label className="fld"><span>Username</span>
-            <input value={username} onChange={e => setUsername(e.target.value)} autoCapitalize="none" autoCorrect="off" placeholder="Username" /></label>
+          <label className="fld"><span>Email or admin username</span>
+            <input value={username} onChange={e => setUsername(e.target.value)} autoCapitalize="none" autoCorrect="off" placeholder="Your email address" autoComplete="username" /></label>
           <label className="fld"><span>Password</span>
             <input type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="••••••••" /></label>
           {err && <div style={{ color:'#e88', fontSize:14, marginBottom:10 }}>{err}</div>}
           <button className="btn gold" disabled={busy}>{busy ? 'Signing in…' : 'Sign In'}</button>
         </form>
+        {message&&<p role="status">{message}</p>}
+        <button className="btn ghost" disabled={busy||!username.trim().includes('@')} onClick={reset}>Set up / reset my password</button>
       </div>
       <p className="muted" style={{ textAlign:'center', fontSize:12, marginTop:14 }}>Luxury concierge delivery operations</p>
     </div>
   )
 }
+

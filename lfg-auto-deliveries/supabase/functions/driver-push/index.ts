@@ -25,16 +25,18 @@ Deno.serve(async(req)=>{
   const body=await req.json(); const action=body.action
   const config=await must(db.rpc('delivery_push_configuration'))
   const worker=req.headers.get('x-lfg-worker');
-  let user:any=null, admin=false
+  let user:any=null, admin=false, personalName:string|null=null
   if(worker && worker===config?.lfg_push_worker) { if(!['drain','health'].includes(action))return respond({error:'Forbidden'},403) }
   else {
    const token=(req.headers.get('Authorization')||'').replace(/^Bearer /i,'')
    const {data,error}=await db.auth.getUser(token)
    if(error||!data.user)return respond({error:'Sign in required'},401)
    user=data.user
-   const profile=await must(db.from('profiles').select('role').eq('id',user.id).maybeSingle())
-   if(!profile||!['driver','admin'].includes(profile.role))return respond({error:'Driver or admin required'},403)
+   const profile=await must(db.from('profiles').select('role,status,driver_roster_id,driver_roster:drivers_roster(name)').eq('id',user.id).maybeSingle())
+   if(!profile||profile.status!=='active'||!['driver','admin'].includes(profile.role))return respond({error:'Driver or admin required'},403)
    admin=profile.role==='admin'
+   personalName=profile.driver_roster?.name||null
+   if(!admin&&!personalName)return respond({error:'Use your personal driver login'},403)
   }
   if(action==='health' && worker===config?.lfg_push_worker) {
    const sample=webpush.generateVAPIDKeys();
@@ -45,7 +47,7 @@ Deno.serve(async(req)=>{
   async function device() {
    if(!uuid(body.device_id)||typeof body.device_token!=='string'||body.device_token.length<40)return null
    const d=await must(db.from('delivery_push_devices').select('*').eq('id',body.device_id).eq('owner_id',user.id).maybeSingle())
-   return d && d.token_hash===await hash(body.device_token) ? d : null
+   return d && (admin||d.driver_name===personalName) && d.token_hash===await hash(body.device_token) ? d : null
   }
   async function send(d:any,payload:any) {
    if(!validSubscription(d.subscription)) return {ok:false,dead:true}
@@ -56,6 +58,7 @@ Deno.serve(async(req)=>{
   }
   if(action==='register') {
    if(!uuid(body.device_id)||typeof body.device_token!=='string'||!/^[A-Za-z0-9_-]{43,100}$/.test(body.device_token)||!validSubscription(body.subscription))return respond({error:'Invalid phone registration'},400)
+   if(!admin&&body.driver_name!==personalName)return respond({error:'Alerts must belong to your driver account'},403)
    const roster=await must(db.from('drivers_roster').select('name').eq('name',body.driver_name).maybeSingle())
    if(!roster)return respond({error:'Choose a driver from the roster'},400)
    const existing=await must(db.from('delivery_push_devices').select('id,token_hash').eq('id',body.device_id).maybeSingle())
@@ -115,3 +118,4 @@ Deno.serve(async(req)=>{
   return respond({error:'Forbidden'},403)
  } catch {return respond({error:'Could not complete alert request. Try again or contact Jess.'},500)}
 })
+

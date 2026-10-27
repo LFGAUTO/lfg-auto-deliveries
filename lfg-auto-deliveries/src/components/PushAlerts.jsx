@@ -2,8 +2,8 @@ import {useEffect,useState} from 'react'
 import {enablePhone,needsHomeScreen,phoneIdentity,phoneRequest,preparePush,pushRequest} from '../lib/push'
 import useRefresh from '../hooks/useRefresh'
 const time=s=>s?new Date(s).toLocaleTimeString([], {hour:'numeric',minute:'2-digit'}):''
-export function PhoneAlerts({drivers,onPhone}) {
- const [driver,setDriver]=useState(''),[phone,setPhone]=useState(null),[prepared,setPrepared]=useState(null),[busy,setBusy]=useState(false),[message,setMessage]=useState(''),[error,setError]=useState('')
+export function PhoneAlerts({drivers,onPhone,fixedDriver=null}) {
+ const [driver,setDriver]=useState(fixedDriver||''),[phone,setPhone]=useState(null),[prepared,setPrepared]=useState(null),[busy,setBusy]=useState(false),[message,setMessage]=useState(''),[error,setError]=useState('')
  const home=needsHomeScreen()
  const supported='serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window
  async function setup() {
@@ -23,9 +23,9 @@ export function PhoneAlerts({drivers,onPhone}) {
  async function disable(){setBusy(true);try{await phoneRequest('disable');const sub=await prepared?.registration.pushManager.getSubscription();await sub?.unsubscribe();setPhone({...phone,active:false});setMessage('Alerts turned off for this phone.')}catch(e){setError(e.message)}finally{setBusy(false)}}
  return <section className="card" style={{marginBottom:16}}><h2 className="section-title">Alerts on this phone</h2>
  {home?<p>Add this app to your iPhone Home Screen: Share → Add to Home Screen. Open the new icon, sign in, then enable alerts here.</p>:!supported?<p>This browser does not support push alerts. Use an up-to-date phone browser.</p>:<>
- <p className="meta">{phone?.active?'Enabled for '+phone.driver_name:'Choose who uses this phone.'} Browsing another driver’s deliveries will not change these alerts.</p>
- <label className="fld"><span>This phone belongs to</span><select value={driver} disabled={busy||phone?.active} onChange={e=>setDriver(e.target.value)}><option value="">Choose driver</option>{drivers.map(d=><option key={d.id} value={d.name}>{d.name}</option>)}</select></label>
- <div className="btnrow">{phone?.active?<><button className="btn gold" disabled={busy} onClick={test}>Send test alert</button><button className="btn ghost" disabled={busy} onClick={disable}>Turn off / change driver</button></>:<button className="btn gold" disabled={busy||!driver||!prepared} onClick={enable}>{busy?'Saving…':'Enable alerts'}</button>}{!prepared&&<button className="btn ghost" onClick={setup}>Retry setup</button>}</div></>}
+ <p className="meta">{phone?.active?'Enabled for '+phone.driver_name:fixedDriver?'Alerts for '+fixedDriver:'Choose who uses this phone.'}</p>
+ {!fixedDriver && <label className="fld"><span>This phone belongs to</span><select value={driver} disabled={busy||phone?.active} onChange={e=>setDriver(e.target.value)}><option value="">Choose driver</option>{drivers.map(d=><option key={d.id} value={d.name}>{d.name}</option>)}</select></label>}
+ <div className="btnrow">{phone?.active?<><button className="btn gold" disabled={busy} onClick={test}>Send test alert</button><button className="btn ghost" disabled={busy} onClick={disable}>Turn off alerts</button></>:<button className="btn gold" disabled={busy||!driver||!prepared} onClick={enable}>{busy?'Saving…':'Enable alerts'}</button>}{!prepared&&<button className="btn ghost" onClick={setup}>Retry setup</button>}</div></>}
  {message&&<p role="status">{message}</p>}{error&&<p className="error-banner" role="alert">{error}</p>}</section>
 }
 export function DriverAcknowledgment({job,phone,onSaved}){
@@ -46,3 +46,4 @@ export function DispatchAlerts(){
  <p className="meta">Published {new Date(j.created_at).toLocaleString()} · {j.deliveries?.customer_name || "Delivery"}{!j.acknowledged_at&&Date.now()-Date.parse(j.created_at)>600000?' · Follow up with driver':''}</p>
  {['failed','no_device'].includes(j.status)&&!j.acknowledged_at&&<button className="btn ghost sm" onClick={()=>retry(j)}>Retry alert</button>}</div>)}</details>
 }
+

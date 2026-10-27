@@ -11,7 +11,7 @@ export function AuthProvider({ children }) {
 
   async function loadProfile(userId) {
     if (!userId) { setProfile(null); return }
-    const { data } = await supabase.from('profiles').select('*').eq('id', userId).single()
+    const { data } = await supabase.from('profiles').select('*,driver_roster:drivers_roster(name)').eq('id', userId).single()
     setProfile(data || null)
   }
 
@@ -29,7 +29,7 @@ export function AuthProvider({ children }) {
     let current = true
     setProfile(null)
     if (session?.user?.id) {
-      supabase.from('profiles').select('*').eq('id', session.user.id).single()
+      supabase.from('profiles').select('*,driver_roster:drivers_roster(name)').eq('id', session.user.id).single()
         .then(({data}) => { if (current) setProfile(data || null) })
     }
     return () => { current = false }
@@ -37,11 +37,13 @@ export function AuthProvider({ children }) {
 
   const value = {
     session, profile, loading,
-    isAdmin: profile?.role === 'admin',
-    isDriver: profile?.role === 'driver',
+    isAdmin: profile?.role === 'admin' && profile?.status === 'active',
+    isDriver: profile?.role === 'driver' && profile?.status === 'active',
+    driverName: profile?.driver_roster?.name || '',
     userName: profile ? [profile.first_name, profile.last_name].filter(Boolean).join(' ') || profile.username : '',
     signOut: () => supabase.auth.signOut(),
     refreshProfile: () => loadProfile(session?.user?.id),
   }
   return <AuthCtx.Provider value={value}>{children}</AuthCtx.Provider>
 }
+
