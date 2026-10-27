@@ -1,3 +1,4 @@
+import DeliveryPhotos from '../components/DeliveryPhotos'
 import { useEffect, useState, useRef } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
@@ -139,8 +140,8 @@ export default function Deliveries() {
               {d.is_ready ? 'Live in driver app' : publishing === d.id ? 'Publishing…' : 'Make delivery live'}
             </button>
             <div className="btnrow" style={{ marginTop: 8 }}>
-              <button className="btn ghost sm" style={{ width: '100%' }} onClick={() => openEdit(d)}>Edit</button>
-              <button className="btn ghost sm" style={{ width: '100%' }} onClick={() => printDeliveryPacket(d)}>🖨 Print / PDF</button>
+              <DeliveryPhotos delivery={d} /><button className="btn ghost sm" style={{ width: '100%' }} onClick={() => openEdit(d)}>Edit</button>
+              <DeliveryPhotos delivery={d} /><button className="btn ghost sm" style={{ width: '100%' }} onClick={() => printDeliveryPacket(d)}>🖨 Print / PDF</button>
               <button className="btn danger sm" style={{ width: '100%' }} onClick={() => remove(d)}>Delete</button>
             </div>
             <div className="btnrow" style={{ marginTop: 8, alignItems: 'center' }}>
@@ -166,3 +167,4 @@ export default function Deliveries() {
     </>
   )
 }
+

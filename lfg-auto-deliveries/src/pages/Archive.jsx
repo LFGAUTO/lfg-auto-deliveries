@@ -1,3 +1,4 @@
+import DeliveryPhotos from '../components/DeliveryPhotos'
 import { useEffect, useState, useMemo, useRef } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
@@ -145,6 +146,7 @@ export default function Archive() {
           <Field label="Client Photo Taken" value={view.task_photo_client ? 'Yes' : 'No'} />
           <Field label="Contract Photo Taken" value={view.task_photo_contract ? 'Yes' : 'No'} />
 
+          <DeliveryPhotos delivery={view} />
           <Closeout delivery={view} onSaved={load} />
           <DeliveryPay key={"pay-" + view.id} delivery={view} onSaved={load} />
           <div className="section-title">Sign-Off</div>
@@ -168,3 +170,4 @@ export default function Archive() {
     </>
   )
 }
+

@@ -9,6 +9,7 @@ export default function Layout() {
     { to: '/', icon: '📊', label: 'Dispatch', end: true },
     { to: '/deliveries', icon: '🚗', label: 'Deliveries' },
     { to: '/drivers', icon: '👤', label: 'Drivers' },
+    { to: '/photos', icon: '📷', label: 'Photos' },
     { to: '/archive', icon: '🗄️', label: 'Archive' },
     { to: '/reports', icon: '🧾', label: 'Reports' },
     { to: '/board', icon: '📺', label: 'TV Board' },
@@ -38,3 +39,4 @@ export default function Layout() {
     </div>
   )
 }
+

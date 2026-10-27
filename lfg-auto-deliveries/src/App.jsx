@@ -8,6 +8,7 @@ import Dashboard from './pages/Dashboard'
 import Deliveries from './pages/Deliveries'
 import Drivers from './pages/Drivers'
 import Archive from './pages/Archive'
+import Photos from './pages/Photos'
 import Reports from './pages/Reports'
 import TVBoard from './pages/TVBoard'
 import DriverPortal from './pages/DriverPortal'
@@ -45,6 +46,7 @@ export default function App() {
           <Route path="/deliveries" element={<Deliveries />} />
           <Route path="/drivers" element={<Drivers />} />
           <Route path="/archive" element={<Archive />} />
+          <Route path="/photos" element={<Photos />} />
           <Route path="/reports" element={<Reports />} />
         </Route>
       )}

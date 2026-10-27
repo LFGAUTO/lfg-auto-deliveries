@@ -1,3 +1,4 @@
+import DeliveryPhotos from '../components/DeliveryPhotos'
 import { driverData, driverRequest } from '../lib/driverData'
 import { payrollSettlement } from '../lib/payroll'
 import { useEffect, useState } from 'react'
@@ -159,6 +160,7 @@ export default function DriverPortal() {
               {d.status === 'at_dealer' && <button disabled={!!busyId} className="btn gold xl" onClick={() => { if (!actor) { setStatusError({id:d.id,message:'Choose your name in the Driver menu above, then tap again.'}); return } if (confirm('Confirm VIN matches, vehicle condition checked, and keys / paperwork collected?')) setStatus(d, 'en_route', 'en_route_at') }}>{busyId === d.id ? 'Saving departure…' : 'Vehicle checked · En route →'}</button>}
               {d.status === 'en_route' && <button disabled={!actor} className="btn gold xl" onClick={() => setDeliverFor(d)}>Complete customer handoff →</button>}
               </>}
+              <DeliveryPhotos delivery={d} />
               {d.delivered_at && <Closeout delivery={d} actor={actor} onSaved={load} />}
               <div className="quick-actions"><button disabled={!actor} className="btn danger" onClick={() => setIssueFor(d)}>Report issue</button><a className="btn ghost" href={`tel:${DISPATCH_PHONE}`}>Call Jess</a><button className="btn ghost" onClick={() => printDeliveryPacket(d)}>Checklist PDF</button></div>
             </article>)}</div></section>
