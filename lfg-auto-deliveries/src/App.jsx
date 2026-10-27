@@ -1,4 +1,5 @@
 import {useState} from 'react'
+import ObserverPortal from './pages/ObserverPortal'
 import SetPassword from './pages/SetPassword'
 import { Routes, Route, Navigate } from 'react-router-dom'
 import { useAuth } from './context/AuthContext'
@@ -18,7 +19,7 @@ function Splash({ text = 'Loading…' }) {
 }
 
 export default function App() {
-  const { session, profile, loading, isAdmin, isDriver, signOut } = useAuth()
+  const { session, profile, loading, isAdmin, isDriver, isObserver, signOut } = useAuth()
   const [passwordSetup,setPasswordSetup]=useState(window.location.pathname==='/set-password'||/type=(invite|recovery)/.test(window.location.hash))
 
   if (loading) return <Splash />
@@ -38,6 +39,7 @@ export default function App() {
   // TV board is shared (no chrome). Available to any signed-in user.
   return (
     <Routes>
+      {isObserver && <Route path="/monitor" element={<ObserverPortal />} />}
       {isAdmin && <Route path="/board" element={<TVBoard />} />}
 
       {isAdmin && (
@@ -53,7 +55,7 @@ export default function App() {
 
       {(isDriver || isAdmin) && <Route path="/driver" element={<DriverPortal />} />}
 
-      <Route path="*" element={<Navigate to={isAdmin ? '/' : '/driver'} replace />} />
+      <Route path="*" element={<Navigate to={isObserver ? '/monitor' : isAdmin ? '/' : '/driver'} replace />} />
     </Routes>
   )
 }

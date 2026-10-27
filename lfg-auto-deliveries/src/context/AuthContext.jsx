@@ -37,6 +37,7 @@ export function AuthProvider({ children }) {
 
   const value = {
     session, profile, loading,
+    isObserver: profile?.role === 'observer' && profile?.status === 'active',
     isAdmin: profile?.role === 'admin' && profile?.status === 'active',
     isDriver: profile?.role === 'driver' && profile?.status === 'active',
     driverName: profile?.driver_roster?.name || '',
