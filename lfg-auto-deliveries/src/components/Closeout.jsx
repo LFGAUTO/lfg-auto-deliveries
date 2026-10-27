@@ -1,3 +1,4 @@
+import ReactivateDelivery from './ReactivateDelivery'
 import { driverData } from '../lib/driverData'
 import { useState } from 'react'
 import { supabase } from '../lib/supabase'
@@ -32,6 +33,7 @@ export default function Closeout({ delivery: d, actor, onSaved, readOnly = false
   }
   const pending = outstanding(d)
   return <section className="closeout">
+    {!d.archived && <ReactivateDelivery delivery={d} onSaved={onSaved} />}
     <div className="section-title">{d.closeout_required ? 'Finish this run' : 'Return record'}</div>
     {d.closeout_required && <p className="sub">Vehicle delivered. Still open: {pending.join(' · ')}.</p>}
     <div className="return-row"><strong>{PAPERWORK[d.paperwork_status] || 'Paperwork not recorded (legacy)'}</strong>

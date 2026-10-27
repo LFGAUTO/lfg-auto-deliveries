@@ -1,3 +1,4 @@
+import ReactivateDelivery from '../components/ReactivateDelivery'
 import DeliveryPhotos from '../components/DeliveryPhotos'
 import { useEffect, useState, useMemo, useRef } from 'react'
 import { supabase } from '../lib/supabase'
@@ -98,6 +99,7 @@ export default function Archive() {
 
       {view && (
         <Modal wide title={view.customer_name} onClose={() => setView(null)}>
+          <ReactivateDelivery delivery={view} onSaved={load} />
           <div className="section-title">Vehicle</div>
           <Field label="Vehicle" value={vehicleLabel(view)} />
           <Field label="VIN" value={view.vin} />
