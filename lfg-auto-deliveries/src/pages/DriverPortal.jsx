@@ -67,7 +67,7 @@ export default function DriverPortal() {
     ;(async () => {
       if(!isAdmin){
         const {data:r,error}=await driverRequest({action:'payroll'})
-        if(current && !error && r){const payment=payrollSettlement(r.payment,r.total,r.count);setPayInfo({total:r.total,count:r.count,paid:payment.settled,changed:payment.changed,balance:payment.balance,label:r.label})}
+        if(current && !error && r){const payment=payrollSettlement(r.payment,r.total,r.count);setPayInfo({total:r.total,count:r.count,extras:r.extras || [],paid:payment.settled,changed:payment.changed,balance:payment.balance,label:r.label})}
         return
       }
       const n = new Date(); const back = (n.getDay() + 1) % 7
@@ -85,8 +85,11 @@ export default function DriverPortal() {
       })
       const { data: pd } = await db.from('payroll_paid').select('driver_name,amount,deliveries')
         .eq('driver_name', realName).eq('week_start', start.toISOString().slice(0, 10))
+      const { data: extraPay, error: extraError } = await db.from('payroll_extras').select('*').eq('driver_name',realName).eq('voided',false).gte('work_date',start.toISOString().slice(0,10)).lte('work_date',end.toISOString().slice(0,10))
+      if(extraError){setPayInfo(null);return}
+      total += (extraPay || []).reduce((sum,x)=>sum+Number(x.amount),0)
       const payment = payrollSettlement(pd?.[0], total, count)
-      setPayInfo({ total, count, paid: payment.settled, changed: payment.changed, balance: payment.balance, label: `${start.toLocaleDateString()} – ${end.toLocaleDateString()}` })
+      setPayInfo({ total, count, extras:extraPay || [], paid: payment.settled, changed: payment.changed, balance: payment.balance, label: `${start.toLocaleDateString()} – ${end.toLocaleDateString()}` })
     })()
     return () => { current=false }
   }, [actor, isAdmin, rows])
@@ -136,7 +139,8 @@ export default function DriverPortal() {
         {isAdmin && <label className="fld driver-picker"><span>Driver</span><select value={pick} onChange={e => setPick(e.target.value)}><option value="all">All drivers · view only</option>{drivers.map(dr => <option key={dr.id} value={dr.name}>{dr.name}</option>)}<option value="__un__">Unassigned · view only</option></select></label>}
         {isAdmin && !actor && <p className="meta" role="status">Choose your name above to update a delivery. All drivers is a view-only list.</p>}
         <PhoneAlerts fixedDriver={isAdmin ? null : driverName} drivers={drivers} onPhone={name => { setAlertPhone(name); isAdmin && setPick(current => linkedDelivery || current === 'all' ? name : current) }} />
-        {payInfo && <div className="earnings-bar"><div><strong>${payInfo.total.toFixed(2)} this week</strong><p className="meta">{payInfo.count} deliveries · {payInfo.label}</p></div><span>{payInfo.paid ? 'Paid' : payInfo.changed ? (payInfo.balance > 0 ? `$${payInfo.balance.toFixed(2)} pending` : 'Pay adjustment under review') : 'Pending'}</span></div>}
+        {payInfo && <div className="earnings-bar"><div><strong>${payInfo.total.toFixed(2)} this week</strong><p className="meta">{payInfo.count} deliveries{payInfo.extras?.length ? ' + '+payInfo.extras.length+' extra pay entries' : ''} · {payInfo.label}</p></div><span>{payInfo.paid ? 'Paid' : payInfo.changed ? (payInfo.balance > 0 ? `$${payInfo.balance.toFixed(2)} pending` : 'Pay adjustment under review') : 'Pending'}</span></div>}
+        {payInfo?.extras?.length>0 && <details className="card"><summary>Extra pay this week</summary>{payInfo.extras.map((x,i)=><p key={i} className="meta">{x.work_date} · {x.category}{x.description?' — '+x.description:''} · ${Number(x.amount).toFixed(2)}</p>)}</details>}
         {loading && <p role="status">Loading deliveries…</p>}
         {loadError && <div className="error-banner" role="alert">{loadError}<button className="btn ghost sm" onClick={load}>Retry</button></div>}
         {(() => {

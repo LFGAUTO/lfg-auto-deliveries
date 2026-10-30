@@ -1,8 +1,8 @@
 import {DRAFT_TEXT_FIELDS} from './model.js';
 const uuid=v=>typeof v==='string'&&/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v);
-const tables={deliveries:['select','insert','update','delete'],issues:['select','update'],activity_log:['select','insert'],drivers_roster:['select','insert','delete'],payroll_paid:['select','upsert','delete']};
+const tables={payroll_extras:['select','insert','update'],deliveries:['select','insert','update','delete'],issues:['select','update'],activity_log:['select','insert'],drivers_roster:['select','insert','delete'],payroll_paid:['select','upsert','delete']};
 const deliveryFields=new Set([...DRAFT_TEXT_FIELDS,'is_trade','cod_required','pay_amount','pay_adjust','pay_adjust_note','pay_exclude','paperwork_status','paperwork_at','paperwork_by','paperwork_recipient','trade_returned_at','trade_returned_by','cod_received','cod_exception','completed_by_name','closeout_required','closeout_completed_at','status','archived','delivered_at','at_dealer_at','en_route_at','is_ready','published_at','updated_at','created_by']);
-const fields={deliveries:deliveryFields,issues:new Set(['resolved','solution','resolved_at','resolved_by']),activity_log:new Set(['delivery_id','user_id','user_name','action']),drivers_roster:new Set(['name','phone']),payroll_paid:new Set(['driver_name','week_start','amount','deliveries','paid_by','paid_at'])};
+const fields={payroll_extras:new Set(['id','driver_name','work_date','category','amount','description','voided']),deliveries:deliveryFields,issues:new Set(['resolved','solution','resolved_at','resolved_by']),activity_log:new Set(['delivery_id','user_id','user_name','action']),drivers_roster:new Set(['name','phone']),payroll_paid:new Set(['driver_name','week_start','amount','deliveries','paid_by','paid_at'])};
 export function validateAdminQuery(input,actor){
  if(!actor?.name||typeof actor.name!=='string'||actor.name.length>100)throw Error('Administrator identity required.');
  const {table,op='select',columns='*',filters=[],orders=[],limit,range,single,values,options={}}=input||{};
@@ -37,6 +37,12 @@ export function validateAdminQuery(input,actor){
   if(table==='activity_log'){patch.user_id=null;patch.user_name=actor.name;if(!String(patch.action||'').trim()||String(patch.action).length>5000)throw Error('Activity description required.');}
   if(table==='issues'&&'resolved_by'in patch)patch.resolved_by=actor.name;
   if(table==='drivers_roster'&&(!String(patch.name||'').trim()||String(patch.name).length>100))throw Error('Driver name required.');
+  if(table==='payroll_extras'){
+   if(op==='insert'){
+    if(!uuid(patch.id)||!/^\d{4}-\d{2}-\d{2}$/.test(patch.work_date)||!['Errand','Lease return','Other'].includes(patch.category)||!Number.isFinite(Number(patch.amount))||Number(patch.amount)<=0||Number(patch.amount)>100000||!String(patch.driver_name||'').trim())throw Error('Choose driver, date, type and positive amount.');
+    patch.created_by=actor.name;
+   }else if(op==='update'){if(Object.keys(patch).length!==1||patch.voided!==true)throw Error('Only removal is supported.');patch.voided_by=actor.name;}
+  }
   if(table==='payroll_paid'){
    if(options.onConflict!=='driver_name,week_start'||!String(patch.driver_name||'').trim()||!/^\d{4}-\d{2}-\d{2}$/.test(patch.week_start)||!Number.isFinite(Number(patch.amount))||Number(patch.amount)<0||!Number.isInteger(patch.deliveries)||patch.deliveries<0)throw Error('Invalid payroll record.');
    patch.paid_by=actor.name;patch.paid_at=new Date().toISOString();

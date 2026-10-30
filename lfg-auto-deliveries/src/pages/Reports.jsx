@@ -1,3 +1,4 @@
+import ExtraPay from '../components/ExtraPay'
 import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
@@ -40,15 +41,28 @@ export default function Reports() {
   const [monthOff, setMonthOff] = useState(0)
   const [payOff, setPayOff] = useState(0)
   const [paid, setPaid] = useState([])
+  const [extras, setExtras] = useState([])
+  const [drivers, setDrivers] = useState([])
+  const [addingPay, setAddingPay] = useState(false)
+  const [payError, setPayError] = useState('')
+  const [payLoading, setPayLoading] = useState(true)
 
   async function load() {
-    const { data } = await supabase.from('deliveries').select('*')
+    setPayLoading(true)
+    const { data, error: deliveryError } = await supabase.from('deliveries').select('*')
     setAll(data || [])
     const { data: iss } = await supabase.from('issues')
       .select('*, deliveries(customer_name)').order('created_at', { ascending: false })
     setIssues(iss || [])
-    const { data: pd } = await supabase.from('payroll_paid').select('*')
+    const { data: pd, error: paidError } = await supabase.from('payroll_paid').select('*')
     setPaid(pd || [])
+    const [extraResult, rosterResult] = await Promise.all([
+      supabase.from('payroll_extras').select('*').eq('voided',false).order('work_date'),
+      supabase.from('drivers_roster').select('*').order('name'),
+    ])
+    if(deliveryError || paidError || extraResult.error || rosterResult.error) setPayError('Could not load extra pay. Refresh before settling payroll.')
+    else { setExtras(extraResult.data || []);setDrivers(rosterResult.data || []);setPayError('') }
+    setPayLoading(false)
   }
   useEffect(() => { load() }, [])
 
@@ -112,14 +126,17 @@ export default function Reports() {
     const line = { d, base: Number(d.pay_amount ?? 100), adj: Number(d.pay_adjust || 0) }
     ;(payTally[name] = payTally[name] || []).push(line)
   }))
-  const payNames = Object.keys(payTally).sort()
-  const driverTotal = (name) => (payTally[name] || []).reduce((s, l) => s + l.base + l.adj, 0)
+  const weekExtras = extras.filter(x=>inDay(x.work_date,pStart,pEnd))
+  const extraLines = name => weekExtras.filter(x=>x.driver_name===name)
+  const payNames = [...new Set([...Object.keys(payTally),...weekExtras.map(x=>x.driver_name),...paid.filter(x=>x.week_start===pStartISO).map(x=>x.driver_name)])].sort()
+  const driverTotal = (name) => (payTally[name] || []).reduce((s, l) => s + l.base + l.adj, 0) + extraLines(name).reduce((s,x)=>s+Number(x.amount),0)
   const grandTotal = payNames.reduce((s, n) => s + driverTotal(n), 0)
   const paymentRecord = (name) => paid.find(p => p.driver_name === name && p.week_start === pStartISO)
   const settlement = (name) => payrollSettlement(paymentRecord(name), driverTotal(name), (payTally[name] || []).length)
   const isPaid = (name) => settlement(name).settled
 
   async function markPaid(name) {
+    if(payError || payLoading) {toast('Wait for payroll to load successfully');return}
     const total = driverTotal(name)
     const prior = paymentRecord(name)
     const payment = settlement(name)
@@ -139,23 +156,27 @@ export default function Reports() {
   }
   function exportPay() {
     const rows = []
-    payNames.forEach(name => payTally[name].forEach(l => rows.push({
+    payNames.forEach(name => (payTally[name] || []).forEach(l => rows.push({
       Driver: name, Paid: isPaid(name) ? 'YES' : (paymentRecord(name) ? 'REVIEW' : 'NO'), WeekPaidAmount: settlement(name).paidAmount.toFixed(2), WeekBalance: settlement(name).balance.toFixed(2), Customer: l.d.customer_name,
       Vehicle: vehicleLabel(l.d), Delivered: l.d.delivered_at ? new Date(l.d.delivered_at).toLocaleString() : '',
       Value: l.base.toFixed(2), Adjust: l.adj.toFixed(2),
       LineTotal: (l.base + l.adj).toFixed(2), AdjustNote: l.d.pay_adjust_note || '',
     })))
-    if (!rows.length) { toast('No payable deliveries this week'); return }
+    weekExtras.forEach(x=>rows.push({Driver:x.driver_name,Paid:isPaid(x.driver_name)?'YES':paymentRecord(x.driver_name)?'REVIEW':'NO',WeekPaidAmount:settlement(x.driver_name).paidAmount.toFixed(2),WeekBalance:settlement(x.driver_name).balance.toFixed(2),Customer:x.description,Vehicle:x.category,Delivered:x.work_date,Value:Number(x.amount).toFixed(2),Adjust:'0.00',LineTotal:Number(x.amount).toFixed(2),AdjustNote:'Extra pay'}))
+    if (payError || payLoading) {toast('Wait for payroll to load successfully');return}
+    if (!rows.length) { toast('No payable work this week'); return }
     downloadCSV(rows, `lfg-payroll-${pStartISO}.csv`)
   }
   function printPay() {
+    if(payError || payLoading) {toast('Wait for payroll to load successfully');return}
     const esc = s => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;')
     const body = payNames.map(name => `
       <h3>${esc(name)} — ${money(driverTotal(name))} ${isPaid(name) ? '(PAID)' : paymentRecord(name) ? `(REVIEW: recorded ${money(settlement(name).paidAmount)}, balance ${money(settlement(name).balance)})` : ''}</h3>
       <table><tr><th>Customer</th><th>Vehicle</th><th>Delivered</th><th>Value</th><th>+/-</th><th>Total</th></tr>
-      ${payTally[name].map(l => `<tr><td>${esc(l.d.customer_name)}</td><td>${esc(vehicleLabel(l.d))}</td>
+      ${(payTally[name] || []).map(l => `<tr><td>${esc(l.d.customer_name)}</td><td>${esc(vehicleLabel(l.d))}</td>
         <td>${l.d.delivered_at ? new Date(l.d.delivered_at).toLocaleString() : ''}</td>
         <td>${money(l.base)}</td><td>${l.adj ? money(l.adj) : '-'}</td><td>${money(l.base + l.adj)}</td></tr>`).join('')}
+      ${extraLines(name).map(x=>`<tr><td>${esc(x.description)}</td><td>${esc(x.category)}</td><td>${esc(x.work_date)}</td><td>${money(x.amount)}</td><td>—</td><td>${money(x.amount)}</td></tr>`).join('')}
       </table>`).join('')
     const html = `<!doctype html><meta charset=utf-8><title>Payroll ${payLabel}</title>
       <style>body{font-family:Arial;padding:28px;color:#111}h1{border-bottom:3px solid #c9a227;padding-bottom:8px}
@@ -239,11 +260,14 @@ export default function Reports() {
               <button className="btn ghost sm" onClick={() => setPayOff(payOff + 1)}>Next ▶</button>
             </div>
             <div className="row" style={{ gap: 8 }}>
+              <button className="btn gold sm" disabled={payLoading || !!payError} onClick={()=>setAddingPay(true)}>+ Add extra pay</button>
               <button className="btn ghost sm" onClick={exportPay}>⬇ CSV</button>
               <button className="btn ghost sm" onClick={printPay}>🖨 Print</button>
             </div>
           </div>
           <div className="sub" style={{ marginTop: 6 }}>Pay week (Sat–Fri): {payLabel}</div>
+          {payError && <p role="alert">{payError} <button className="btn ghost sm" onClick={load}>Retry</button></p>}
+          {addingPay && <ExtraPay drivers={drivers} date={pStartISO} onClose={()=>setAddingPay(false)} onSaved={()=>{setAddingPay(false);toast('Extra pay saved to the work date’s payroll week');load()}}/>}
 
           <div className="kpis" style={{ marginTop: 14 }}>
             <div className="kpi gold"><div className="n">{money(grandTotal)}</div><div className="k">Total owed this week</div></div>
@@ -251,7 +275,7 @@ export default function Reports() {
             <div className="kpi"><div className="n">{payNames.length}</div><div className="k">Drivers</div></div>
           </div>
 
-          {payNames.length === 0 && <div className="muted" style={{ marginTop: 14 }}>No payable deliveries in this week.</div>}
+          {payNames.length === 0 && <div className="muted" style={{ marginTop: 14 }}>No payable work in this week.</div>}
 
           <div className="grid" style={{ marginTop: 14 }}>
             {payNames.map(name => {
@@ -264,11 +288,12 @@ export default function Reports() {
                     <span className="pill" style={{ color: p ? '#7bd88f' : '#e8d9a8' }}>{money(driverTotal(name))}{p ? ' · PAID' : ''}</span>
                   </div>
                   <hr />
-                  {payTally[name].map((l, idx) => (
+                  {(payTally[name] || []).map((l, idx) => (
                     <div key={idx} className="meta" style={{ marginTop: 4 }}>
                       • {l.d.customer_name} — {vehicleLabel(l.d)} · {money(l.base)}{l.adj ? ` ${l.adj > 0 ? '+' : ''}${money(l.adj)} (${l.d.pay_adjust_note || 'adj'})` : ''}
                     </div>
                   ))}
+                  {extraLines(name).map(x=><div key={x.id} className="meta" style={{marginTop:8}}>• {x.category}{x.description?' — '+x.description:''} · {x.work_date} · {money(x.amount)} <button className="btn ghost sm" onClick={async()=>{if(!confirm('Remove this extra pay entry? The payroll total will be recalculated.'))return;const {error}=await supabase.from('payroll_extras').update({voided:true}).eq('id',x.id);if(error){toast(error.message);return}load()}}>Remove</button></div>)}
                   {payment.changed && <p className="meta" role="status">Previously marked paid: {money(payment.paidAmount)} · {payment.balance > 0 ? `Additional owed: ${money(payment.balance)}` : payment.balance < 0 ? `Review payment difference: ${money(payment.balance)}` : 'Delivery count changed — review required'}</p>}
                   <div className="btnrow" style={{ marginTop: 10 }}>
                     {p
