@@ -1,3 +1,4 @@
+import { customerPhotoStatus } from '../lib/customerPhoto'
 import { useState } from 'react'
 import Modal from './Modal'
 
@@ -49,7 +50,8 @@ export function PhotoGallery({ delivery, customerOnly = false, issues = [] }) {
     {!!photos.length && <button className="btn ghost sm" disabled={busy} onClick={() => prepare(photos)}>{busy ? 'Preparing…' : `Prepare all ${photos.length} photos to save`}</button>}
     {files && <div className="card" style={{ marginTop:12 }}><button className="btn gold" onClick={save}>Save / share {files.length === 1 ? 'photo' : `${files.length} photos`}</button><p className="meta">Choose Save Image / Save Images on iPhone, or select an app. Desktop browsers download the originals.</p></div>}
     {message && <p role="status">{message}</p>}
-    {!photos.length && <p className="muted">{delivery.client_photo_refused && customerOnly ? 'Customer declined a photo.' : 'No photos uploaded in this view yet.'}</p>}
+    {!delivery.client_photo_url && (delivery.client_photo_pending || delivery.client_photo_refused) && <p className="muted">{customerPhotoStatus(delivery)}</p>}
+    {!photos.length && <p className="muted">No photos uploaded in this view yet.</p>}
     <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(220px,1fr))', gap:14, marginTop:14 }}>
       {photos.map(p => <article className="card" key={p.url}>
         <h3>{p.category}</h3>

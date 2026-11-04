@@ -16,7 +16,7 @@ test('driver handoff preserves its draft on failure and dispatch calls Jess', as
   Object.defineProperty(globalThis, 'navigator', { value: dom.window.navigator, configurable: true })
   globalThis.IS_REACT_ACT_ENVIRONMENT = true
   window.confirm = () => true
-  const d = { id: 'test-job', status: 'en_route', is_ready: true, archived: false, customer_name: 'Test Customer', customer_phone: '5555555555', driver1_name: 'Mike', make: 'Nissan', model: 'Rogue', delivery_date: '2026-10-06', cod_required: true, cod_amount: '555', cod_type: 'Check', cod_made_out_to: 'LFG AUTO LLC', paperwork_status: 'pending' }
+  const d = { id: 'test-job', status: 'en_route', is_ready: true, archived: false, customer_name: 'Test Customer', admin_notes: 'Landing lead #0028\nCall before arrival', customer_phone: '5555555555', driver1_name: 'Mike', make: 'Nissan', model: 'Rogue', delivery_date: '2026-10-06', cod_required: true, cod_amount: '555', cod_type: 'Check', cod_made_out_to: 'LFG AUTO LLC', paperwork_status: 'pending' }
   globalThis.fixture = { d, writes: [], messages: [], fail: true }
   localStorage.setItem('lfg-driver-name', 'Mike')
   localStorage.setItem('lfg_deliver_draft_test-job', JSON.stringify({ sig: 'test-signature', ok: true, eContract: true, refusedPic: true }))
@@ -39,7 +39,21 @@ test('driver handoff preserves its draft on failure and dispatch calls Jess', as
     await act(async()=>root.render(React.createElement(Driver)))
     assert.equal(document.querySelector('a[href="tel:+17325470333"]').textContent,'Contact dispatch · Jess')
     assert.ok(!document.body.textContent.includes('Call dealer'))
+    assert.ok(!document.body.textContent.includes('Landing lead'))
+    assert.ok(document.body.textContent.includes('Call before arrival'))
     await click('Complete customer handoff →')
+    await click('2. Photos')
+    const photoChoice = text => [...document.querySelectorAll('label')].find(l=>l.textContent.includes(text)).querySelector('input')
+    await act(async()=>photoChoice('Customer will take their own photo').click())
+    assert.equal(photoChoice('Customer refused photo').checked,false)
+    assert.equal(JSON.parse(localStorage.getItem('lfg_deliver_draft_test-job')).pendingPic,true)
+    await act(async()=>photoChoice('Customer refused photo').click())
+    assert.equal(photoChoice('Customer will take their own photo').checked,false)
+    await act(async()=>photoChoice('Customer will take their own photo').click())
+    await click('×')
+    await click('Complete customer handoff →')
+    assert.equal(photoChoice('Customer will take their own photo').checked,true)
+
     await click('3. Sign off')
     await click('Confirm Delivered')
     assert.ok(fixture.messages.at(-1).includes('Confirm COD'))
@@ -54,6 +68,10 @@ test('driver handoff preserves its draft on failure and dispatch calls Jess', as
     await click('Confirm Delivered')
     assert.equal(localStorage.getItem('lfg_deliver_draft_test-job'),null)
     const patch=fixture.writes.filter(x=>x.table==='deliveries').at(-1).patch
+    assert.equal(patch.client_photo_pending,true)
+    assert.equal(patch.client_photo_refused,false)
+    assert.equal(patch.task_photo_client,false)
+    assert.equal(patch.client_photo_url,null)
     assert.equal(patch.cod_received,true)
     assert.equal(patch.closeout_required,true)
     assert.equal(patch.archived,true)

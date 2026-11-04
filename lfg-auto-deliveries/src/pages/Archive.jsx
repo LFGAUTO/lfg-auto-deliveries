@@ -1,3 +1,4 @@
+import { customerPhotoStatus } from '../lib/customerPhoto'
 import ReactivateDelivery from '../components/ReactivateDelivery'
 import DeliveryPhotos from '../components/DeliveryPhotos'
 import { useEffect, useState, useMemo, useRef } from 'react'
@@ -145,7 +146,7 @@ export default function Archive() {
           <Field label="Gave LFG Box" value={view.task_lfg_box ? 'Yes' : 'No'} />
           <Field label="Installed Vehicle App" value={view.task_app ? 'Yes' : 'No'} />
           <Field label="Asked for Review" value={view.task_review ? 'Yes' : 'No'} />
-          <Field label="Client Photo Taken" value={view.task_photo_client ? 'Yes' : 'No'} />
+          <Field label="Customer photo" value={customerPhotoStatus(view)} />
           <Field label="Contract Photo Taken" value={view.task_photo_contract ? 'Yes' : 'No'} />
 
           <DeliveryPhotos delivery={view} />

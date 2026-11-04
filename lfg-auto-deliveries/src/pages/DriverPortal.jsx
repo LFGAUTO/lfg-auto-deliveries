@@ -1,3 +1,4 @@
+import { driverVisibleNotes } from '../lib/customerPhoto'
 import DeliveryPhotos from '../components/DeliveryPhotos'
 import { driverData, driverRequest } from '../lib/driverData'
 import { payrollSettlement } from '../lib/payroll'
@@ -157,7 +158,7 @@ export default function DriverPortal() {
               <div className="quick-actions">{d.dealership_address && <a className="btn ghost" href={directions(d.dealership_address)} target="_blank" rel="noreferrer">Navigate to dealer</a>}{d.delivery_address && <a className="btn ghost" href={directions(d.delivery_address)} target="_blank" rel="noreferrer">Navigate to customer</a>}{d.customer_phone && <a className="btn ghost" href={`tel:${d.customer_phone.replace(/[^+0-9]/g, '')}`}>Call customer</a>}</div>
               <p className="meta">VIN: {d.vin || 'Not provided'} · {driverNames(d).join(' & ') || 'Unassigned'}</p>
               {d.cod_required && <div className="payment-callout"><span>{d.cod_received ? 'COD collected' : 'Collect at handoff'}</span><strong>${d.cod_amount} · {d.cod_type}</strong><p>Payable to {d.cod_made_out_to}</p></div>}
-              {d.admin_notes && <div className="driver-note">{d.admin_notes}</div>}
+              {driverVisibleNotes(d.admin_notes) && <div className="driver-note">{driverVisibleNotes(d.admin_notes)}</div>}
               <div className="next-step"><span className="eyebrow">Your next step</span><p>{nextAction(d)}</p></div>
               {statusError?.id === d.id && <p className="error-banner" role="alert">{statusError.message}</p>}
               {d.status === 'assigned' && <button disabled={!!busyId} className="btn gold xl" onClick={() => setStatus(d, 'at_dealer', 'at_dealer_at')}>{busyId === d.id ? 'Saving arrival…' : 'I’m at the dealer →'}</button>}
@@ -211,7 +212,8 @@ function DeliverModal({ d, onClose, onDone }) {
   const [notes, setNotes] = useState(saved.notes || '')
   const [tasks, setTasks] = useState(saved.tasks || { bt: false, box: false, app: false, review: false })
   const [eContract, setEContract] = useState(saved.eContract || false)
-  const [refusedPic, setRefusedPic] = useState(saved.refusedPic || false)
+  const [refusedPic, setRefusedPic] = useState((saved.refusedPic ?? !!d.client_photo_refused) && !(saved.pendingPic ?? d.client_photo_pending))
+  const [pendingPic, setPendingPic] = useState(saved.pendingPic ?? !!d.client_photo_pending)
   // each photo keeps a File (just-picked) AND a url (once uploaded). Either counts as "have it".
   const [clientFile, setClientFile] = useState(null)
   const [clientUrl, setClientUrl] = useState(saved.clientUrl || null)
@@ -226,9 +228,9 @@ function DeliverModal({ d, onClose, onDone }) {
 
   // Auto-save the parts we safely can (urls + fields) so a reload doesn't wipe progress.
   useEffect(() => {
-    const draft = { codReceived, codException, tradeReceived, sig, ok, notes, tasks, eContract, refusedPic, clientUrl, contractUrl, tradeUrl, extraUrls }
+    const draft = { codReceived, codException, tradeReceived, sig, ok, notes, tasks, eContract, refusedPic, pendingPic, clientUrl, contractUrl, tradeUrl, extraUrls }
     try { localStorage.setItem(KEY, JSON.stringify(draft)) } catch {}
-  }, [codReceived, codException, tradeReceived, sig, ok, notes, tasks, eContract, refusedPic, clientUrl, contractUrl, tradeUrl, extraUrls])
+  }, [codReceived, codException, tradeReceived, sig, ok, notes, tasks, eContract, refusedPic, pendingPic, clientUrl, contractUrl, tradeUrl, extraUrls])
 
   const tog = (k) => () => setTasks(p => ({ ...p, [k]: !p[k] }))
 
@@ -270,18 +272,18 @@ function DeliverModal({ d, onClose, onDone }) {
     if (d.is_trade && !tradeReceived) { toast('Confirm trade received or report an issue to Jess'); return }
     if (!sig) { toast('Driver signature required'); return }
     if (!ok) { toast('Confirm acceptable condition'); return }
-    if (!clientFile && !clientUrl && !refusedPic) { toast('Client photo required (or mark Customer refused photo)'); return }
+    if (!clientFile && !clientUrl && !refusedPic && !pendingPic) { toast('Add a client photo, or select refused / customer will send their own photo'); return }
     if (!contractFile && !contractUrl && !eContract) { toast('Contract photo required (or mark E-Contract)'); return }
     if (d.is_trade && !tradeFile && !tradeUrl) { toast('Trade / lease return photo required'); return }
     setBusy(true)
-    const client_photo_url = refusedPic ? null : await ensure(clientUrl, clientFile, 'client')
+    const client_photo_url = (refusedPic || pendingPic) ? null : await ensure(clientUrl, clientFile, 'client')
     const contract_photo_url = eContract ? null : await ensure(contractUrl, contractFile, 'contract')
     const trade_photo_url = d.is_trade ? await ensure(tradeUrl, tradeFile, 'trade') : null
     // extras: keep any already uploaded, plus upload any files not yet uploaded
     const already = extraUrls.length
     const extra_photos = [...extraUrls]
     for (let i = already; i < extraFiles.length; i++) { const u = await ensure(null, extraFiles[i], 'extra'); if (u) extra_photos.push(u) }
-    if (!client_photo_url && !refusedPic) { setBusy(false); toast('Client photo did not upload - retry'); return }
+    if (!client_photo_url && !refusedPic && !pendingPic) { setBusy(false); toast('Client photo did not upload - retry'); return }
     if (!contract_photo_url && !eContract) { setBusy(false); toast('Contract photo did not upload - retry'); return }
     if (d.is_trade && !trade_photo_url) { setBusy(false); toast('Trade photo did not upload - retry'); return }
     const success = await onDone({
@@ -293,7 +295,7 @@ function DeliverModal({ d, onClose, onDone }) {
       extra_photos,
       task_bluetooth: tasks.bt, task_lfg_box: tasks.box, task_app: tasks.app, task_review: tasks.review,
       task_photo_client: !!client_photo_url, task_photo_contract: !!contract_photo_url,
-      e_contract: eContract, client_photo_refused: refusedPic,
+      e_contract: eContract, client_photo_refused: refusedPic, client_photo_pending: pendingPic,
     })
     if (success) { try { localStorage.removeItem(KEY) } catch {} }
     setBusy(false)
@@ -330,9 +332,11 @@ function DeliverModal({ d, onClose, onDone }) {
       <div style={{ height: 10 }} />
       </div><div hidden={phase !== 1}>
       <label className="check"><input type="checkbox" checked={eContract} onChange={e => setEContract(e.target.checked)} /> E-Contract (no paper contract to photo)</label>
-      <label className="check"><input type="checkbox" checked={refusedPic} onChange={e => setRefusedPic(e.target.checked)} /> Customer refused photo</label>
+      <label className="check"><input type="checkbox" checked={refusedPic} onChange={e => {setRefusedPic(e.target.checked); if(e.target.checked) setPendingPic(false)}} /> Customer refused photo</label>
+      <label className="check"><input type="checkbox" checked={pendingPic} onChange={e => {setPendingPic(e.target.checked); if(e.target.checked) setRefusedPic(false)}} /> Customer will take their own photo and send it to us</label>
+      {pendingPic && <p className="meta">For example, it is too dark outside. You can complete delivery; the customer photo will remain pending.</p>}
       <div style={{ height: 10 }} />
-      {!refusedPic && photoRow('Client Photo (required)', clientFile, clientUrl, f => pick(f, 'client', setClientFile, setClientUrl))}
+      {!refusedPic && !pendingPic && photoRow('Client Photo (required)', clientFile, clientUrl, f => pick(f, 'client', setClientFile, setClientUrl))}
       {!eContract && photoRow('Contract Photo (required)', contractFile, contractUrl, f => pick(f, 'contract', setContractFile, setContractUrl))}
       {d.is_trade && photoRow('Trade / Lease Return Photo (required)', tradeFile, tradeUrl, f => pick(f, 'trade', setTradeFile, setTradeUrl))}
       <label className="fld"><span>Additional Photos (optional - pick any from your phone){extraCount ? ` - ${extraCount} added` : ''}</span>

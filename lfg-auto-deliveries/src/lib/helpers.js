@@ -1,3 +1,4 @@
+import { driverVisibleNotes } from './customerPhoto'
 import { easternDay } from './workflow'
 export const STATUS = {
   assigned:  { label: 'Assigned',  color: '#9a9a93' },
@@ -147,7 +148,7 @@ export function printDeliveryPacket(d) {
       ${d.is_trade ? `&nbsp;&nbsp; ${yes(d.trade_photo_url)} Trade Photo` : ''}
     </div>
 
-    ${d.admin_notes ? `<h3>Notes</h3><div style="font-size:13px">${esc(d.admin_notes)}</div>` : ''}
+    ${driverVisibleNotes(d.admin_notes) ? `<h3>Notes</h3><div style="font-size:13px">${esc(driverVisibleNotes(d.admin_notes))}</div>` : ''}
 
     <div class="sig">
       <div class="sigline"></div>

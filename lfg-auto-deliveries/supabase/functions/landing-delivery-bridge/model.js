@@ -38,7 +38,7 @@ export function deliveryPrefill(lead = {}) {
     is_trade: !!f.trade || /^yes$/i.test(lead.has_trade || ''), trade_kind: trade.kind === 'Lease return' ? 'lease_return' : 'trade',
     trade_year: text(trade.year || lead.trade_year), trade_make: trade.make || lead.trade_make || '', trade_model: trade.model || lead.trade_model || '',
     trade_vin: trade.vin || lead.trade_vin || '', trade_notes: trade.notes || '', trade_destination: 'office',
-    admin_notes: `Landing lead #${lead.lead_number || ''}`, pay_amount: 100, cod_required: false,
+    admin_notes: '', pay_amount: 100, cod_required: false,
   };
 }
 export const isDraftEditable = d => !!d && !d.is_ready && !d.archived && !d.delivered_at && d.status === 'assigned';
