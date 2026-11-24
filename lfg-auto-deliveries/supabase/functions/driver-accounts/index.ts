@@ -12,7 +12,20 @@ Deno.serve(async req=>{
  const expected=hex(await crypto.subtle.sign('HMAC',key,new TextEncoder().encode('driver-account-setup:'+minute)))
  let different=0;for(let i=0;i<64;i++)different|=signature.charCodeAt(i)^expected.charCodeAt(i)
  if(different)return reply({error:'Unauthorized'},401)
- const {data:accounts,error:loadError}=await db.rpc('driver_accounts_to_invite');if(loadError)return reply({error:'Could not read approved drivers'},500)
+ const body=await req.json().catch(()=>({}))
+ const email=typeof body.email==='string'?body.email.trim().toLowerCase():''
+ let accounts
+ if(email){
+  // Refresh setup only for an approved, active driver who has never confirmed.
+  const {data:profile,error:profileError}=await db.from('profiles').select('id,email,driver_roster_id').eq('email',email).eq('role','driver').eq('status','active').not('driver_roster_id','is',null).maybeSingle()
+  if(profileError||!profile)return reply({error:'Approved driver not found'},404)
+  const {data:user,error:userError}=await db.auth.admin.getUserById(profile.id)
+  if(userError||!user.user||user.user.email?.toLowerCase()!==email||user.user.email_confirmed_at)return reply({error:'Account is not awaiting first-time setup'},409)
+  accounts=[{email}]
+ }else{
+  const {data,error:loadError}=await db.rpc('driver_accounts_to_invite');if(loadError)return reply({error:'Could not read approved drivers'},500)
+  accounts=data
+ }
  const result=[]
  for(const account of accounts){
   const {data,error}=await db.auth.admin.generateLink({type:'invite',email:account.email,options:{redirectTo:'https://delivery.lfgauto.com/set-password'}})
