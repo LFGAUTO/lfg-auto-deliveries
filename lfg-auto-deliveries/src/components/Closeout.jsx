@@ -1,3 +1,4 @@
+import { requiresCod } from '../lib/cod'
 import ReactivateDelivery from './ReactivateDelivery'
 import { driverData } from '../lib/driverData'
 import { useState } from 'react'
@@ -49,10 +50,11 @@ export default function Closeout({ delivery: d, actor, onSaved, readOnly = false
     {d.is_trade && <div className="return-row"><strong>{d.trade_returned_at ? 'Trade returned' : `Trade return · ${tradeDestination(d)}`}</strong>
       {d.trade_returned_at ? <p className="meta">{d.trade_returned_by} · {fmtDateTime(d.trade_returned_at)}</p> : !readOnly && d.closeout_required && <button className="btn ghost" disabled={busy} onClick={() => save({ trade_returned_at: new Date().toISOString(), trade_returned_by: actor || userName }, `Returned trade to ${tradeDestination(d)}`)}>Confirm trade dropped off</button>}
     </div>}
-    {d.cod_required && !d.cod_received && <div className="payment-callout"><strong>COD still outstanding · ${d.cod_amount}</strong><p>{d.cod_exception || 'Confirm collection with Jess.'}</p>{!readOnly && d.closeout_required && <button disabled={busy} className="btn gold" onClick={() => save({ cod_received: true }, 'Confirmed COD collected')}>Confirm COD collected</button>}</div>}
+    {requiresCod(d) && !d.cod_received && <div className="payment-callout"><strong>COD still outstanding · ${d.cod_amount}</strong><p>{d.cod_exception || 'Confirm collection with Jess.'}</p>{!readOnly && d.closeout_required && <button disabled={busy} className="btn gold" onClick={() => save({ cod_received: true }, 'Confirmed COD collected')}>Confirm COD collected</button>}</div>}
     {error && <p className="error-banner" role="alert">{error}</p>}
     {busy && <p role="status">Saving return…</p>}
     {d.closeout_completed_at && <p className="meta">Run closed {fmtDateTime(d.closeout_completed_at)}</p>}
   </section>
 }
+
 

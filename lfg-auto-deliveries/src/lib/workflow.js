@@ -1,3 +1,4 @@
+import { requiresCod } from './cod.js'
 export const DISPATCH_PHONE = '+17325470333'
 export const PAPERWORK = { pending: 'Paperwork pending', ups: 'Dropped off at UPS', dealer: 'Returned to dealer', office: 'With Jess / office', not_required: 'No originals to return', e_contracts: 'E-contracts · no paperwork to return' }
 export function easternDay(value = new Date()) {
@@ -17,7 +18,7 @@ export const tradeDestination = d => d.trade_destination === 'dealer' ? d.trade_
 export const directions = address => `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(address)}`
 export function outstanding(d) {
   const items = []
-  if (d.cod_required && !d.cod_received) items.push('COD collection')
+  if (requiresCod(d) && !d.cod_received) items.push('COD collection')
   if (d.is_trade && !d.trade_returned_at) items.push('Trade return')
   if (!['ups', 'dealer', 'office', 'not_required', 'e_contracts'].includes(d.paperwork_status)) items.push(d.paperwork_status === 'office' ? 'Paperwork · Jess / office' : 'Paperwork return')
   return items
@@ -37,3 +38,4 @@ export function dateGroup(d) {
   if (d.delivery_date === today) return 'Today'
   return 'Upcoming'
 }
+
