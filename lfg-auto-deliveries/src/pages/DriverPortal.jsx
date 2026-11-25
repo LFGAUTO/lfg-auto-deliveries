@@ -1,4 +1,5 @@
 import { driverVisibleNotes } from '../lib/customerPhoto'
+import DriverDealDetails, { dealMoney } from '../components/DriverDealDetails'
 import DeliveryPhotos from '../components/DeliveryPhotos'
 import { driverData, driverRequest } from '../lib/driverData'
 import { payrollSettlement } from '../lib/payroll'
@@ -153,11 +154,12 @@ export default function DriverPortal() {
             return <section key={group}><h2 className="section-title">{group} · {jobs.length}</h2><div className="driver-jobs">{jobs.map(d => <article id={"delivery-" + d.id} className="card driver-job" key={d.id}>
               <DriverAcknowledgment job={pushJobs.find(j => j.delivery_id === d.id && j.revision === d.push_revision)} phone={alertPhone} onSaved={loadPushJobs} />
               <div className="dcard"><div><div className="eyebrow">{dayLabel(d.delivery_date)}</div><h2 className="cn">{d.customer_name}</h2><p className="meta">Customer phone: {d.customer_phone ? <a className="gold" href={`tel:${d.customer_phone.replace(/[^+0-9]/g, '')}`} aria-label={`Call ${d.customer_name} at ${d.customer_phone}`}>{d.customer_phone}</a> : 'Not provided'}</p><p className="meta">{vehicleLabel(d)}{d.color ? ` · ${d.color}` : ''}</p></div><StatusPill status={d.status} /></div>
+              <DriverDealDetails delivery={d} />
               {!d.delivered_at && <><div className="timing-grid"><div><span>Be at dealer by</span><strong>{fmtClock(d.dealer_by_time) || 'Time needed'}</strong><p>{d.dealership_name || 'Dealer needed'}</p></div><div><span>Customer window</span><strong>{custWindow(d) || 'Confirm with Jess'}</strong></div></div>
               <div className="trip-list"><div><span>01</span><div><strong>{d.dealership_name || 'Pickup'}</strong><p>{d.dealership_address || 'Pickup address not provided'}</p></div></div><div><span>02</span><div><strong>Customer handoff</strong><p>{d.delivery_address || 'Address needed'}</p></div></div>{d.is_trade && <div><span>03</span><div><strong>Trade / lease return</strong><p>{tradeDestination(d)}</p><p>{d.trade_notes}</p></div></div>}{d.return_plan && <div><span>→</span><div><strong>After this run</strong><p>{d.return_plan}</p></div></div>}</div>
               <div className="quick-actions">{d.dealership_address && <a className="btn ghost" href={directions(d.dealership_address)} target="_blank" rel="noreferrer">Navigate to dealer</a>}{d.delivery_address && <a className="btn ghost" href={directions(d.delivery_address)} target="_blank" rel="noreferrer">Navigate to customer</a>}{d.customer_phone && <a className="btn ghost" href={`tel:${d.customer_phone.replace(/[^+0-9]/g, '')}`}>Call customer</a>}</div>
-              <p className="meta">VIN: {d.vin || 'Not provided'} · {driverNames(d).join(' & ') || 'Unassigned'}</p>
-              {d.cod_required && <div className="payment-callout"><span>{d.cod_received ? 'COD collected' : 'Collect at handoff'}</span><strong>${d.cod_amount} · {d.cod_type}</strong><p>Payable to {d.cod_made_out_to}</p></div>}
+              <p className="meta">Drivers: {driverNames(d).join(' & ') || 'Unassigned'}</p>
+              {d.cod_required && <div className="payment-callout"><span>{d.cod_received ? 'COD collected' : 'Collect at handoff'}</span><strong>{dealMoney(d.cod_amount)} · {d.cod_type || 'Payment method not provided'}</strong><p>Payable to {d.cod_made_out_to || 'Not provided'}</p></div>}
               {driverVisibleNotes(d.admin_notes) && <div className="driver-note">{driverVisibleNotes(d.admin_notes)}</div>}
               <div className="next-step"><span className="eyebrow">Your next step</span><p>{nextAction(d)}</p></div>
               {statusError?.id === d.id && <p className="error-banner" role="alert">{statusError.message}</p>}
@@ -322,7 +324,7 @@ function DeliverModal({ d, onClose, onDone }) {
       <label className="check" style={{ margin: '14px 0' }}>
         <input type="checkbox" checked={ok} onChange={e => setOk(e.target.checked)} /> Delivered in acceptable condition
       </label>
-      {d.cod_required && <div className="payment-callout"><strong>Collect ${d.cod_amount} · {d.cod_type}</strong><p>Payable to {d.cod_made_out_to}</p><label className="check"><input type="checkbox" checked={codReceived} onChange={e => setCodReceived(e.target.checked)} />COD collected</label>{!codReceived && <label className="fld"><span>Payment issue (if not collected)</span><textarea value={codException} onChange={e => setCodException(e.target.value)} /></label>}</div>}
+      {d.cod_required && <div className="payment-callout"><strong>Collect {dealMoney(d.cod_amount)} · {d.cod_type || 'Payment method not provided'}</strong><p>Payable to {d.cod_made_out_to || 'Not provided'}</p><label className="check"><input type="checkbox" checked={codReceived} onChange={e => setCodReceived(e.target.checked)} />COD collected</label>{!codReceived && <label className="fld"><span>Payment issue (if not collected)</span><textarea value={codException} onChange={e => setCodException(e.target.value)} /></label>}</div>}
       {d.is_trade && <label className="check"><input type="checkbox" checked={tradeReceived} onChange={e => setTradeReceived(e.target.checked)} />Trade vehicle and keys received</label>}
       <div className="section-title">Delivery Tasks</div>
       <label className="check"><input type="checkbox" checked={tasks.bt} onChange={tog('bt')} /> Set up Bluetooth</label>
@@ -381,4 +383,5 @@ function IssueModal({ d, onClose, onDone }) {
     </Modal>
   )
 }
+
 
