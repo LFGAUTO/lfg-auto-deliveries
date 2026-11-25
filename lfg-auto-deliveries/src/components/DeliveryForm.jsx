@@ -72,9 +72,9 @@ export default function DeliveryForm({ existing, drivers, onClose, onSaved }) {
   async function save() {
     if (busy) return
     if (!f.customer_name.trim()) { toast('Customer name is required'); return }
-    if (d1Other && !f.driver1_name.trim()) { toast('Type the Driver 1 name'); return }
-    if (d2Other && !f.driver2_name.trim()) { toast('Type the Driver 2 name'); return }
-    if (f.driver1_name && f.driver1_name === f.driver2_name) { toast('Choose two different drivers'); return }
+    if (!existing?.archived && d1Other && !f.driver1_name.trim()) { toast('Type the Driver 1 name'); return }
+    if (!existing?.archived && d2Other && !f.driver2_name.trim()) { toast('Type the Driver 2 name'); return }
+    if (!existing?.archived && f.driver1_name && f.driver1_name === f.driver2_name) { toast('Choose two different drivers'); return }
     if (f.cust_window_start && f.cust_window_end && f.cust_window_end < f.cust_window_start) { toast('Delivery window ends before it starts'); return }
     setBusy(true)
 
@@ -134,6 +134,11 @@ export default function DeliveryForm({ existing, drivers, onClose, onSaved }) {
       admin_notes: clean(f.admin_notes),
     }
 
+    // Archived pay and drivers use their dedicated, reason-required editors.
+    if (existing?.archived) {
+      for (const key of ['driver1_name','driver2_name','pay_amount','pay_adjust','pay_adjust_note','pay_exclude']) delete payload[key]
+    }
+
     let res
     if (existing) {
       payload.updated_at = new Date().toISOString()
@@ -180,7 +185,7 @@ export default function DeliveryForm({ existing, drivers, onClose, onSaved }) {
       {field('customer_name', 'Customer Name')}
       <div className="fg2">
         {field('customer_phone', 'Customer Phone', 'tel')}
-        <label className="fld"><span>Driver 1</span>
+        {!existing?.archived && <label className="fld"><span>Driver 1</span>
           <select value={d1Other ? '__other__' : f.driver1_name}
             onChange={e => {
               const v = e.target.value
@@ -190,8 +195,9 @@ export default function DeliveryForm({ existing, drivers, onClose, onSaved }) {
             <option value="">— Unassigned —</option>
             {drivers.map(d => <option key={d.id} value={d.name}>{d.name}</option>)}
             <option value="__other__">Other (write in name)</option>
-          </select></label>
+          </select></label>}
       </div>
+      {!existing?.archived && <>
       {d1Other && field('driver1_name', 'Driver 1 Name (write in)', 'text', { placeholder: 'Type driver name' })}
       <label className="fld"><span>Driver 2 (optional)</span>
         <select value={d2Other ? '__other__' : f.driver2_name}
@@ -205,6 +211,7 @@ export default function DeliveryForm({ existing, drivers, onClose, onSaved }) {
           <option value="__other__">Other (write in name)</option>
         </select></label>
       {d2Other && field('driver2_name', 'Driver 2 Name (write in)', 'text', { placeholder: 'Type driver name' })}
+      </>}
       {field('delivery_address', 'Delivery Address')}
       <div className="fg2">
         {field('delivery_date', 'Delivery Date', 'date')}
@@ -289,6 +296,7 @@ export default function DeliveryForm({ existing, drivers, onClose, onSaved }) {
 
       {section('Paperwork return')}
       {['pending', 'not_required', 'e_contracts'].includes(f.paperwork_status || 'pending') ? <label className="fld"><span>Paperwork</span><select value={f.paperwork_status || 'pending'} onChange={set('paperwork_status')}><option value="pending">Original paperwork to return</option><option value="e_contracts">E-contracts · no paperwork to return</option><option value="not_required">No originals to return</option></select></label> : <p className="meta">Return already recorded: {f.paperwork_status}. See the closeout record.</p>}
+      {!existing?.archived && <>
       {section('Driver Pay')}
       <div className="fg2">
         {choice('pay_amount', 'Driver pay ($ per driver)', [...choices.values('pay_amount'), '100'], { type: 'number' })}
@@ -297,6 +305,7 @@ export default function DeliveryForm({ existing, drivers, onClose, onSaved }) {
       {Number(f.pay_adjust) !== 0 && area('pay_adjust_note', 'Reason for bonus/deduction')}
       <label className="check"><input type="checkbox" checked={f.pay_exclude} onChange={set('pay_exclude')} /> Exclude from payroll (don't pay — e.g. test delivery)</label>
 
+      </>}
       {section('Notes')}
       {area('admin_notes', 'Admin Notes')}
 
@@ -307,3 +316,4 @@ export default function DeliveryForm({ existing, drivers, onClose, onSaved }) {
     </Modal>
   )
 }
+

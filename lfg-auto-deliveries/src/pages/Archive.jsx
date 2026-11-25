@@ -1,3 +1,4 @@
+import DeliveryForm from '../components/DeliveryForm'
 import { customerPhotoStatus } from '../lib/customerPhoto'
 import ReactivateDelivery from '../components/ReactivateDelivery'
 import DeliveryPhotos from '../components/DeliveryPhotos'
@@ -19,6 +20,7 @@ export default function Archive() {
   const [rows, setRows] = useState([])
   const [q, setQ] = useState('')
   const [view, setView] = useState(null)
+  const [editing, setEditing] = useState(false)
   const [linkedId] = useState(() => new URLSearchParams(window.location.search).get('delivery'))
   const handledLink = useRef(null)
   useEffect(() => {
@@ -93,13 +95,17 @@ export default function Archive() {
               <div className="meta">{vehicleLabel(d)} · VIN {d.vin || '—'}</div>
               <div className="meta">Delivered {fmtDateTime(d.delivered_at)}</div>
             </div>
-            <span className="gold" style={{ fontSize: 13 }}>View →</span>
+            <span className="gold" style={{ fontSize: 13 }}>View / edit →</span>
           </div>
         ))}
       </div>
 
-      {view && (
+      {view && !editing && (
         <Modal wide title={view.customer_name} onClose={() => setView(null)}>
+          <button className="btn gold" onClick={() => setEditing(true)}>Edit delivery details</button>
+          <p className="meta">Correct the archived record without reopening the delivery. Pay and driver changes update payroll; recorded payments remain intact.</p>
+          <DeliveryDrivers key={"drivers-" + view.id} delivery={view} onSaved={load} />
+          <DeliveryPay key={"pay-" + view.id} delivery={view} onSaved={load} />
           <ReactivateDelivery delivery={view} onSaved={load} />
           <div className="section-title">Vehicle</div>
           <Field label="Vehicle" value={vehicleLabel(view)} />
@@ -117,7 +123,6 @@ export default function Archive() {
           <Field label="Phone" value={view.customer_phone} />
           <Field label="Address" value={view.delivery_address} />
           <Field label="Driver" value={[view.driver1_name, view.driver2_name].filter(Boolean).join(' & ')} />
-          <DeliveryDrivers key={"drivers-" + view.id} delivery={view} onSaved={load} />
 
           <div className="section-title">Timestamps</div>
           <Field label="At Dealer" value={fmtDateTime(view.at_dealer_at)} />
@@ -151,7 +156,6 @@ export default function Archive() {
 
           <DeliveryPhotos delivery={view} />
           <Closeout delivery={view} onSaved={load} />
-          <DeliveryPay key={"pay-" + view.id} delivery={view} onSaved={load} />
           <div className="section-title">Sign-Off</div>
           {view.driver_signature && <img src={view.driver_signature} alt="signature" style={{ background: '#fff', borderRadius: 10, maxWidth: 260, marginTop: 6 }} />}
           <div className="row" style={{ marginTop: 10 }}>
@@ -170,7 +174,9 @@ export default function Archive() {
           </div>
         </Modal>
       )}
+      {view && editing && <DeliveryForm existing={view} drivers={[]} onClose={() => setEditing(false)} onSaved={load} />}
     </>
   )
 }
+
 

@@ -30,8 +30,9 @@ test('archived pay edit validates amounts and changes only payroll fields',async
  assert.equal(payFixture.patch,null);assert.match(document.querySelector('[role=alert]').textContent,/reason/)
  await set(base,'150');await set(extra,'25');await set(document.querySelector('textarea'),'Long delivery')
  await click('Save delivery pay')
- assert.deepEqual(payFixture.patch,{pay_amount:150,pay_adjust:25,pay_adjust_note:'Long delivery'})
+ assert.deepEqual(payFixture.patch,{pay_amount:150,pay_adjust:25,pay_adjust_note:'Long delivery',pay_exclude:false})
  assert.equal(payFixture.saved,1)
  assert.ok(!('status' in payFixture.patch));assert.ok(!('archived' in payFixture.patch))
  }finally{await act(async()=>root.unmount());await rm(dir,{recursive:true,force:true});dom.window.close()}
 })
+

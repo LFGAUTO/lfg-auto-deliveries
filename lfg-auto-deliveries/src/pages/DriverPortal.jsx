@@ -138,6 +138,7 @@ export default function DriverPortal() {
       </div>
 
       <div className="content">
+        <nav className="quick-actions" aria-label="Driver navigation"><a className="btn gold" href="/driver" aria-current="page">Deliveries</a><a className="btn ghost" href={isAdmin && actor ? `/driver/payroll?driver=${encodeURIComponent(actor)}` : "/driver/payroll"}>Payroll</a></nav>
         <div className="page-heading"><div><div className="eyebrow">LFG driver operations</div><h1 className="h1">{actor ? `Your day, ${actor}.` : 'Your delivery day.'}</h1><p className="sub">{isAdmin ? "Choose a driver to preview their deliveries." : "Your assigned deliveries and personal pay. Use controls only while parked."}</p></div><a className="btn ghost sm" href={`tel:${DISPATCH_PHONE}`}>Contact dispatch · Jess</a></div>
         {isAdmin && <label className="fld driver-picker"><span>Driver</span><select value={pick} onChange={e => setPick(e.target.value)}><option value="all">All drivers · view only</option>{drivers.map(dr => <option key={dr.id} value={dr.name}>{dr.name}</option>)}<option value="__un__">Unassigned · view only</option></select></label>}
         {isAdmin && !actor && <p className="meta" role="status">Choose your name above to update a delivery. All drivers is a view-only list.</p>}

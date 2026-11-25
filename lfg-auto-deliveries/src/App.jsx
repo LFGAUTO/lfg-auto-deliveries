@@ -13,6 +13,7 @@ import Photos from './pages/Photos'
 import Reports from './pages/Reports'
 import TVBoard from './pages/TVBoard'
 import DriverPortal from './pages/DriverPortal'
+import DriverPayroll from './pages/DriverPayroll'
 
 function Splash({ text = 'Loading…' }) {
   return <div style={{ display:'grid', placeItems:'center', height:'100vh', color:'#9a9a93' }}>{text}</div>
@@ -55,8 +56,11 @@ export default function App() {
 
       {(isDriver || isAdmin) && <Route path="/driver" element={<DriverPortal />} />}
 
+      {(isDriver || isAdmin) && <Route path="/driver/payroll" element={<DriverPayroll />} />}
+
       <Route path="*" element={<Navigate to={isObserver ? '/monitor' : isAdmin ? '/' : '/driver'} replace />} />
     </Routes>
   )
 }
+
 

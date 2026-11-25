@@ -33,6 +33,14 @@ test('open delivery edits survive roster and record refreshes, then save the ent
  const save=[...document.querySelectorAll('button')].find(b=>/Save/.test(b.textContent));assert(save)
  await act(async()=>save.click());assert.equal(deliveryFormFixture.patch.make,'RAM');assert.equal(deliveryFormFixture.patch.model,'1500');assert.equal(deliveryFormFixture.patch.color,'Granite Crystal');assert.equal(deliveryFormFixture.patch.dealership_address,'123 Test Street');assert.equal(deliveryFormFixture.patch.dealership_phone,'Test salesman');assert.equal(deliveryFormFixture.patch.delivery_date,'2026-10-16');assert.equal(deliveryFormFixture.patch.customer_phone,'7325550100');assert.equal(deliveryFormFixture.closed,1)
  await render({id:'other',customer_name:'Another customer',delivery_date:'2026-10-20'});assert.equal(field('Customer Name').value,'Another customer');assert.equal(field('Delivery Date').value,'2026-10-20')
+ await render({id:'archived',customer_name:'Archived customer',archived:true,status:'delivered',driver1_name:'Original driver',pay_amount:175,delivered_at:'2026-10-20T12:00:00Z'});
+ assert.ok(!document.body.textContent.includes('Driver 1'));
+ assert.ok(!document.body.textContent.includes('Driver Pay'));
+ await set('Customer Name','Corrected customer');
+ await act(async()=>[...document.querySelectorAll('button')].find(b=>b.textContent==='Save Delivery').click());
+ assert.equal(deliveryFormFixture.patch.customer_name,'Corrected customer');
+ for(const key of ['driver1_name','driver2_name','pay_amount','pay_adjust','pay_adjust_note','pay_exclude','archived','status','delivered_at']) assert.ok(!(key in deliveryFormFixture.patch),key+' is preserved');
  await render(null);await set('Customer Name','New customer');await set('Delivery Date','2026-10-16');await render(null);assert.equal(field('Customer Name').value,'New customer');assert.equal(field('Delivery Date').value,'2026-10-16')
  }finally{await act(async()=>root.unmount());await rm(dir,{recursive:true,force:true});dom.window.close()}
 })
+
